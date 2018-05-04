@@ -1,25 +1,67 @@
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
      kashiwa.js
    ──────────────────────────────
-     Ver. 5.0.0
-     Copyright(c) 2014-2015 ARINOKI
+     Ver. 6.0.0
+     Copyright(c) 2014-2018 ARINOKI
      Released under the MIT license
      http://opensource.org/licenses/mit-license.php
    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 
 /* ──────────────────────────────
 
+     + [各種関数の定義]
+     |
      + [テンプレートの定義]
      |  |
      |  + Main_Template
-     |  |
-     |  + Scene_Template
      |
      + [シーンの制御]
      |  |
      |  + FrameTimer
      |  |
+     |  + Scene
+     |  |
      |  + SceneController
+     |
+     + [表示オブジェクトの定義]
+     |  |
+     |  + Text
+     |  |
+     |  + FillRect
+     |  |
+     |  + StrokeRect
+     |  |
+     |  + FillCircle
+     |  |
+     |  + StrokeCircle
+     |  |
+     |  + FillRoundRect
+     |  |
+     |  + StrokeRoundRect
+     |  |
+     |  + DrawImage
+     |  |
+     |  + Spinner
+     |
+     + [表示オブジェクトの定義(Web)]
+     |  |
+     |  + Text
+     |  |
+     |  + FillRect
+     |  |
+     |  + StrokeRect
+     |  |
+     |  + FillCircle
+     |  |
+     |  + StrokeCircle
+     |  |
+     |  + FillRoundRect
+     |  |
+     |  + StrokeRoundRect
+     |  |
+     |  + DrawImage
+     |  |
+     |  + Spinner
      |
      + [ブラウザの制御]
      |  |
@@ -31,7 +73,7 @@
      |  |
      |  + InputChecker
      |  |
-     |  + GetInput
+     |  + InputChecker(Web)
      |
      + [データの制御]
      |  |
@@ -51,24 +93,216 @@
      |  |
      |  + ThumbController
      |
-     + [表示・演出]
-     |  |
-     |  + LoadingAnime
+     + [インタラクション]
      |  |
      |  + ButtonController
      |  |
      |  + Easing
      |
      + [ユーティリティ]
-     |  |
-     |  + Debugger
-     |
-     + [各種関数の定義]
+        |
+        + Debugger
+      
 
    ────────────────────────────── */
 
 var kashiwa = {};
 (function(pkg) {
+
+	pkg.web = {};
+
+
+	/* --------------------
+	    各種関数の定義
+	-------------------- */
+
+	pkg.addHash = function(val, hash) {
+	/* 連想配列を追加する
+	   - p1 : 追加先の変数
+	   - p2 : 連想配列リスト */
+
+		for (var key in hash) {
+			val[key] = hash[key];
+		}
+	};
+
+	pkg.inheritPrototype = function(child, parent) {
+	/* プロトタイプを継承する
+	   - p1 : 継承先のクラス
+	   - p2 : 継承元のクラス */
+
+		var tmp = function tmp() {};
+		tmp.prototype = parent.prototype;
+		child.prototype = new tmp();
+	};
+
+	pkg.clone = function(src) {
+	/* 配列変数をディープコピーする
+	   - p1 : コピー元の変数 */
+
+		var ret;
+		if (src.constructor === Array) {
+			ret = [];
+		} else if (src.constructor === Object) {
+			ret = {};
+		} else {
+			return (src);
+		}
+		for (var key in src) {
+			ret[key] = this.clone(src[key]);
+		}
+		return (ret);
+	};
+
+	pkg.getRankList = function(list, mode) {
+	/* 配列のIDを値の大小で並べ替える(同値はIDの若い方が優位)
+	   - p1 : 数値リスト
+	   - p2 : 判定方式(false= 昇順/ true= 降順) */
+
+		var data = pkg.clone(list);
+		var idList = new Array();
+		var n, i, j;
+		for (i = 0; i < data.length; i ++) {
+			idList[i] = i;
+		}
+
+		for (i = 0; i < data.length - 1; i ++) {
+			for (j = i + 1; j < data.length; j ++) {
+				if (mode == false) {
+					if (data[j] < data[i]) {
+						// 値を入れ替え
+						n = data[j];
+						data[j] = data[i];
+						data[i] = n;
+
+						// IDを入れ替え
+						n = idList[j];
+						idList[j] = idList[i];
+						idList[i] = n;
+					}
+				} else {
+					if (data[j] > data[i]) {
+						// 値を入れ替え
+						n = data[j];
+						data[j] = data[i];
+						data[i] = n;
+
+						// IDを入れ替え
+						n = idList[j];
+						idList[j] = idList[i];
+						idList[i] = n;
+					}
+				}
+			}
+		}
+
+		return (idList);
+	},
+
+	pkg.replaceVals = function(string, list) {
+	/* コードを数値に置き換える
+	   - p1 : 置き換える文字列
+	   - p2 : 数値リスト */
+
+		var tmpStr = string;
+		for (var n = 1; n <= list.length; n ++) {
+			tmpStr = tmpStr.replace('<$' + n + '>', list[n - 1]);
+		}
+		return (tmpStr);
+	};
+
+	pkg.calcPhotoSize = function(inputW, inputH, frameW, frameH, mode) {
+	/* 画像の拡縮サイズを算出する
+	   - p1 : 元画像の幅
+	   - p2 : 元画像の高さ
+	   - p3 : 収めたい枠の幅
+	   - p4 : 収めたい枠の高さ
+	   - p5 : オプション(false= 拡大を許す / true= 縮小のみ)
+	   - return ( [拡縮後の幅, 拡縮後の高さ] ) */
+
+		if (mode == true) {
+		// 原寸以下で表示
+
+			// 初期値
+			tmpRate = 1;
+			if ((inputW > frameW) || (inputH > frameH)) {
+				// 幅に合わせた場合の倍率
+				tmpRate = frameW / inputW;
+				if (inputH * tmpRate > frameH) {
+					// 高さに合わせた場合の倍率
+					tmpRate = frameH / inputH;
+				}
+			}
+		} else {
+		// 拡大を許す
+
+			// 幅に合わせた場合の倍率
+			tmpRate = frameW / inputW;
+			if (inputH * tmpRate > frameH) {
+				// 高さに合わせた場合の倍率
+				tmpRate = frameH / inputH;
+			}
+		}
+
+		return ([Math.floor(inputW * tmpRate), Math.floor(inputH * tmpRate)]);
+	};
+
+	pkg.calcThumbSize = function(orig_w, orig_h, max_w, max_h) {
+	/* 画像のトリミングサイズを算出する
+	   - p1 : 元画像の幅
+	   - p2 : 元画像の高さ
+	   - p3 : 収めたい枠の幅
+	   - p4 : 収めたい枠の高さ
+	   - return ( [切出後の最終的な幅, 切出後の最終的な高さ, 縮小する幅, 縮小する高さ] ) */
+
+		var resizerate;
+		var out_trim_w;
+		var out_trim_h;
+		var out_small_w;
+		var out_small_h;
+
+		// サムネイルの切り出しエリアを算出
+		resizerate = max_h / max_w;
+		out_width = orig_w;
+		out_height = Math.floor(orig_w * resizerate);
+		if (out_height > orig_h) {
+			out_height = orig_h;
+			out_width = Math.floor(orig_h / resizerate);
+		}
+		out_trim_w = out_width;
+		out_trim_h = out_height;
+
+		// 縮小後のサムネイルサイズを算出
+		resizerate = max_w / orig_w;
+		out_width = max_w;
+		out_height = Math.floor(orig_h * resizerate);
+		if (out_height < max_h) {
+			resizerate = max_h / orig_h;
+			out_height = max_h;
+			out_width = Math.floor(orig_w * resizerate);
+		}
+		out_small_w = out_width;
+		out_small_h = out_height;
+
+		return ([out_trim_w, out_trim_h, out_small_w, out_small_h]);
+	};
+
+	pkg.addEvent = function(ev_name) {
+	/* カスタムイベントを発生させる
+	   - p1 : イベント名 */
+
+		var customEvent = document.createEvent("HTMLEvents");
+		customEvent.initEvent(ev_name, true, false);
+		window.dispatchEvent(customEvent);
+	};
+
+	pkg.hideAddrBar = function() {
+	/* アドレスバーを隠す */
+
+		window.scrollTo(0,1);
+	};
+
+
 
 	/* --------------------
 	    テンプレートの定義
@@ -182,111 +416,6 @@ var kashiwa = {};
 	};
 
 
-	/*
-		---------- [Scene_Template]
-	*/
-
-	pkg.Scene_Template = function(common_vars) {
-		this.common = common_vars;
-		this.sceneCtrl = this.common.sceneCtrl;
-		this.inputChk = this.common.inputChk;
-		this.transitionState = -1;
-		this.transitionCnt = 0;
-		this.transitionRate = 1;
-	};
-	pkg.Scene_Template.prototype = {
-
-		init:function() {
-		/* 初期化処理 */
-
-			return false;
-		},
-
-		open:function() {
-		/* オープン時 */
-
-			this.transitionState = 0;
-			this.transitionCnt = 0;
-
-			this.openEx();
-		},
-
-		openEx:function() {
-		/* オープン時 追加処理 */
-
-			return false;
-		},
-
-		close:function() {
-		/* クローズ時 */
-
-			this.transitionState = 2;
-			this.transitionCnt = 0;
-
-			this.closeEx();
-		},
-
-		closeEx:function() {
-		/* クローズ時 追加処理 */
-
-			return false;
-		},
-
-		update:function() {
-		/* 画面更新,入力チェック */
-
-			this.updateTransition(1, 1);
-		},
-
-		updateTransition:function(op_cnt_max, cl_cnt_max) {
-		/* 画面遷移の更新 */
-
-			// 画面遷移のカウンタ
-			if ((this.transitionState == 0) || (this.transitionState == 2)) {
-				this.transitionCnt += this.transitionRate;
-
-				// 画面遷移の完了
-				if ((this.transitionState == 0) && (this.transitionCnt >= op_cnt_max)) {
-					this.transitionState = 1;
-					this.common.sceneCtrl.transitionHandler();
-					this.transitionCompletedOpEx();
-				}
-				if ((this.transitionState == 2) && (this.transitionCnt >= cl_cnt_max)) {
-					this.transitionState = -1;
-					this.common.sceneCtrl.transitionHandler();
-					this.transitionCompletedClEx();
-				}
-			}
-		},
-
-		transitionCompletedOpEx:function() {
-		/* オープン完了時 追加処理 */
-
-			return false;
-		},
-
-		transitionCompletedClEx:function() {
-		/* クローズ完了時 追加処理 */
-
-			return false;
-		},
-
-		getState:function() {
-		/* 遷移ステータス取得
-	     - return ( ステータスコード )
-	       ステータスコード :
-	       - = -1 : invisible
-	       - =  0 : opening
-	       - =  1 : available
-	       - =  2 : closing */
-
-			var tmp = this.transitionState;
-			return (tmp);
-		}
-
-	};
-
-
 
 	/* --------------------
 	    シーンの制御
@@ -325,6 +454,122 @@ var kashiwa = {};
 			this.beforeTime = this.currentTime;
 
 			return (drawCnt);
+		}
+
+	};
+
+
+	/*
+		---------- [Scene]
+	*/
+
+	pkg.Scene = function() {
+		this.initFunc = function() {};
+		this.openFunc = function() {};
+		this.openCompletedFunc = function() {};
+		this.closeFunc = function() {};
+		this.closeCompletedFunc = function() {};
+		this.updateFunc = function() {};	
+	};
+	pkg.Scene.prototype = {
+
+		init:function(ctrl) {
+		/* 初期化する
+		   - p1 : シーンコントローラ */
+
+			this.sceneCtrl = ctrl;
+
+			this.objects = new Array();
+			this.transitionState = -1;
+			this.transitionCnt = 0;
+			this.transitionRate = 1;
+
+			this.openFrameMax = 0;
+			this.closeFrameMax = 0;
+
+			this.initFunc();
+		},
+
+		draw:function(ctx) {
+		/* 登録オブジェクトを全て描画する
+		   - p1 : 対象canvasのコンテキスト */
+
+//			for (i = this.objects.length - 1; i >= 0; i --) {
+			for (i = 0; i < this.objects.length; i ++) {
+				this.objects[i].draw(ctx);
+			}
+		},
+
+		open:function() {
+		/* オープン時 */
+
+			this.transitionState = 0;
+			this.transitionCnt = 0;
+
+			this.openFunc();
+		},
+
+		close:function() {
+		/* クローズ時 */
+
+			this.transitionState = 2;
+			this.transitionCnt = 0;
+
+			this.closeFunc();
+		},
+
+		update:function(rate) {
+		/* 画面更新,入力チェック */
+
+			this.transitionRate = rate;
+			this.updateFunc();
+			this.updateTransition(this.openFrameMax, this.closeFrameMax);
+		},
+
+		updateTransition:function(op_cnt_max, cl_cnt_max) {
+		/* 画面遷移の更新 */
+
+			// 画面遷移のカウンタ
+			if ((this.transitionState == 0) || (this.transitionState == 2)) {
+				this.transitionCnt += this.transitionRate;
+
+				// 画面遷移の完了
+				if ((this.transitionState == 0) && (this.transitionCnt >= op_cnt_max)) {
+					this.transitionState = 1;
+					this.sceneCtrl.transitionHandler();
+					this.transitionCompletedOpEx();
+				}
+				if ((this.transitionState == 2) && (this.transitionCnt >= cl_cnt_max)) {
+					this.transitionState = -1;
+					this.sceneCtrl.transitionHandler();
+					this.transitionCompletedClEx();
+				}
+			}
+		},
+
+		transitionCompletedOpEx:function() {
+		/* オープン完了時 追加処理 */
+
+			this.openCompletedFunc();
+		},
+
+		transitionCompletedClEx:function() {
+		/* クローズ完了時 追加処理 */
+
+			this.closeCompletedFunc();
+		},
+
+		getState:function() {
+		/* 遷移ステータス取得
+	     - return ( ステータスコード )
+	       ステータスコード :
+	       - = -1 : invisible
+	       - =  0 : opening
+	       - =  1 : available
+	       - =  2 : closing */
+
+			var tmp = this.transitionState;
+			return (tmp);
 		}
 
 	};
@@ -395,15 +640,15 @@ var kashiwa = {};
 			}
 		},
 
-		update:function() {
+		update:function(rate) {
 		/* シーンをアップデートする */
 
-			if (this.relatedIdsUI[this.currentId] != -1) {
-				this.listUI[this.relatedIdsUI[this.currentId]].update();
-			}
-			this.listScene[this.currentId].update();
 			if (this.relatedIdsBg[this.currentId] != -1) {
-				this.listBg[this.relatedIdsBg[this.currentId]].update();
+				this.listBg[this.relatedIdsBg[this.currentId]].update(rate);
+			}
+			this.listScene[this.currentId].update(rate);
+			if (this.relatedIdsUI[this.currentId] != -1) {
+				this.listUI[this.relatedIdsUI[this.currentId]].update(rate);
 			}
 		},
 
@@ -425,6 +670,11 @@ var kashiwa = {};
 				this.nextId = this.queueList.shift();
 				this.state = 2;
 				startFlg = true;
+			}
+			if ((this.state == 0) && (this.queueList[0] == this.currentId)) {
+			// 同じシーンの場合
+				this.queueList.shift();
+				return (-1);
 			}
 			if (this.state == 0) {
 				// 現在のシーンをクローズ
@@ -521,6 +771,640 @@ var kashiwa = {};
 		}
 
 	};
+
+
+
+	/* --------------------
+	    表示オブジェクトの定義
+	-------------------- */
+
+	pkg.obj = {};
+
+	/*
+		---------- [Text]
+	*/
+
+	pkg.obj.Text = function() {
+		this.init();
+	};
+	pkg.obj.Text.prototype = {
+
+		init:function() {
+		/* 初期化する */
+
+			this.body = '';
+
+			this.hidden = false;
+			this.x = 0;
+			this.y = 0;
+
+			this.alpha = 1.0;
+			this.fill = {};
+			this.fill.r = 64;
+			this.fill.g = 64;
+			this.fill.b = 64;
+
+			this.font = 'sans-serif';
+			this.weight = 'normal';
+			this.size = 12;
+			this.align = 'left';
+			this.baseline = 'top';
+		}
+
+	};
+
+
+	/*
+		---------- [FillRect]
+	*/
+
+	pkg.obj.FillRect = function() {
+		this.init();
+	};
+	pkg.obj.FillRect.prototype = {
+
+		init:function() {
+		/* 初期化する */
+
+			this.hidden = false;
+			this.x = 0;
+			this.y = 0;
+			this.w = 0;
+			this.h = 0;
+
+			this.alpha = 1.0;
+			this.fill = {};
+			this.fill.r = 0;
+			this.fill.g = 0;
+			this.fill.b = 0;
+		}
+
+	};
+
+
+	/*
+		---------- [StrokeRect]
+	*/
+
+	pkg.obj.StrokeRect = function() {
+		this.init();
+	};
+	pkg.obj.StrokeRect.prototype = {
+
+		init:function() {
+		/* 初期化する */
+
+			this.hidden = false;
+			this.x = 0;
+			this.y = 0;
+			this.w = 0;
+			this.h = 0;
+
+			this.alpha = 1.0;
+			this.stroke = {};
+			this.stroke.r = 0;
+			this.stroke.g = 0;
+			this.stroke.b = 0;
+
+			this.lineCap = 'round';
+			this.lineWidth = 1;
+		}
+
+	};
+
+
+	/*
+		---------- [FillCircle]
+	*/
+
+	pkg.obj.FillCircle = function() {
+		this.init();
+	};
+	pkg.obj.FillCircle.prototype = {
+
+		init:function() {
+		/* 初期化する */
+
+			this.hidden = false;
+			this.x = 0;
+			this.y = 0;
+			this.r = 0;
+
+			this.alpha = 1.0;
+			this.fill = {};
+			this.fill.r = 0;
+			this.fill.g = 0;
+			this.fill.b = 0;
+		}
+
+	};
+
+
+	/*
+		---------- [StrokeCircle]
+	*/
+
+	pkg.obj.StrokeCircle = function() {
+		this.init();
+	};
+	pkg.obj.StrokeCircle.prototype = {
+
+		init:function() {
+		/* 初期化する */
+
+			this.hidden = false;
+			this.x = 0;
+			this.y = 0;
+			this.r = 0;
+
+			this.alpha = 1.0;
+			this.stroke = {};
+			this.stroke.r = 0;
+			this.stroke.g = 0;
+			this.stroke.b = 0;
+
+			this.lineWidth = 1;
+		}
+
+	};
+
+
+	/*
+		---------- [FillRoundRect]
+	*/
+
+	pkg.obj.FillRoundRect = function() {
+		this.init();
+	};
+	pkg.obj.FillRoundRect.prototype = {
+
+		init:function() {
+		/* 初期化する */
+
+			this.hidden = false;
+			this.x = 0;
+			this.y = 0;
+			this.w = 0;
+			this.h = 0;
+			this.r = 4;
+
+			this.alpha = 1.0;
+			this.fill = {};
+			this.fill.r = 0;
+			this.fill.g = 0;
+			this.fill.b = 0;
+		}
+
+	};
+
+
+	/*
+		---------- [StrokeRoundRect]
+	*/
+
+	pkg.obj.StrokeRoundRect = function() {
+		this.init();
+	};
+	pkg.obj.StrokeRoundRect.prototype = {
+
+		init:function() {
+		/* 初期化する */
+
+			this.hidden = false;
+			this.x = 0;
+			this.y = 0;
+			this.w = 0;
+			this.h = 0;
+			this.r = 4;
+
+			this.alpha = 1.0;
+			this.stroke = {};
+			this.stroke.r = 0;
+			this.stroke.g = 0;
+			this.stroke.b = 0;
+
+			this.lineWidth = 1;
+		}
+
+	};
+
+
+	/*
+		---------- [DrawImage]
+	*/
+
+	pkg.obj.DrawImage = function() {
+		this.init();
+	};
+	pkg.obj.DrawImage.prototype = {
+
+		init:function() {
+		/* 初期化する */
+
+			this.hidden = false;
+			this.x = 0;
+			this.y = 0;
+			this.w = 0;
+			this.h = 0;
+
+			this.alpha = 1.0;
+		}
+
+	};
+
+
+	/*
+		---------- [Spinner]
+	*/
+
+	pkg.obj.Spinner = function() {
+		this.init();
+	};
+	pkg.obj.Spinner.prototype = {
+
+		init:function() {
+		/* 初期化する */
+
+			this.hidden = false;
+			this.x = 0;
+			this.y = 0;
+			this.r = 0;
+
+			this.fill = {};
+			this.fill.r = 0;
+			this.fill.g = 0;
+			this.fill.b = 0;
+
+			this.frameMax = 100;
+
+			this.cnt = 0;
+		},
+
+		update:function(quantity) {
+		/* カウンタを進める */
+
+			// カウンタを進める
+			this.amountCnt = 0;
+			this.cnt += quantity;
+			if (this.cnt >= this.frameMax) {
+				while (this.cnt >= this.frameMax) {
+					this.cnt -= this.frameMax;
+					this.amountCnt ++;
+				}
+			}
+		}
+
+	};
+
+
+
+	/* --------------------
+	    表示オブジェクトの定義(Web)
+	-------------------- */
+
+	// ピクセル密度
+	pkg.web.pxr = 1;
+
+	/*
+		---------- [Text]
+	*/
+
+	pkg.web.Text = function() {
+		pkg.obj.Text.apply(this, arguments);
+	};
+	pkg.inheritPrototype(pkg.web.Text, pkg.obj.Text);
+	pkg.addHash(pkg.web.Text.prototype, {
+
+		draw:function(ctx) {
+		/* 描画する
+		   - p1 : 対象canvasのコンテキスト */
+
+			if (this.hidden == true) {
+				return false;
+			}
+			ctx.globalAlpha = this.alpha;
+			var tmpFont = this.size * pkg.web.pxr;
+			ctx.font = '' + this.weight + ' ' + tmpFont + 'px ' + this.font;
+			ctx.fillStyle = 'rgb(' + this.fill.r + ', ' + this.fill.g + ', ' + this.fill.b + ')';
+			ctx.textAlign = this.align;
+			ctx.textBaseline = this.baseline;
+			ctx.fillText(this.body, this.x * pkg.web.pxr, this.y * pkg.web.pxr);
+		},
+
+		measure:function(ctx) {
+		/* 横幅を計測する
+		   - p1 : 対象canvasのコンテキスト */
+
+			if (this.hidden == true) {
+				return false;
+			}
+			ctx.globalAlpha = this.alpha;
+			var tmpFont = this.size * pkg.web.pxr;
+			ctx.font = '' + this.weight + ' ' + tmpFont + 'px ' + this.font;
+			ctx.fillStyle = 'rgb(' + this.fill.r + ', ' + this.fill.g + ', ' + this.fill.b + ')';
+			ctx.textAlign = this.align;
+			ctx.textBaseline = this.baseline;
+			var tmp = ctx.measureText(this.body);
+			return (tmp.width / pkg.web.pxr);
+		}
+
+	});
+
+
+	/*
+		---------- [FillRect]
+	*/
+
+	pkg.web.FillRect = function() {
+		pkg.obj.FillRect.apply(this, arguments);
+	};
+	pkg.inheritPrototype(pkg.web.FillRect, pkg.obj.FillRect);
+	pkg.addHash(pkg.web.FillRect.prototype, {
+
+		draw:function(ctx) {
+		/* 描画する
+		   - p1 : 対象canvasのコンテキスト */
+
+			if (this.hidden == true) {
+				return false;
+			}
+			ctx.globalAlpha = this.alpha;
+			ctx.fillStyle = 'rgb(' + this.fill.r + ', ' + this.fill.g + ', ' + this.fill.b + ')';
+			ctx.fillRect(this.x * pkg.web.pxr, this.y * pkg.web.pxr, this.w * pkg.web.pxr, this.h * pkg.web.pxr);
+		}
+
+	});
+
+
+	/*
+		---------- [StrokeRect]
+	*/
+
+	pkg.web.StrokeRect = function() {
+		pkg.obj.StrokeRect.apply(this, arguments);
+	};
+	pkg.inheritPrototype(pkg.web.StrokeRect, pkg.obj.StrokeRect);
+	pkg.addHash(pkg.web.StrokeRect.prototype, {
+
+		draw:function(ctx) {
+		/* 描画する
+		   - p1 : 対象canvasのコンテキスト */
+
+			if (this.hidden == true) {
+				return false;
+			}
+			ctx.globalAlpha = this.alpha;
+			ctx.strokeStyle = 'rgb(' + this.stroke.r + ', ' + this.stroke.g + ', ' + this.stroke.b + ')';
+			ctx.lineCap = this.lineCap;
+			ctx.lineWidth = this.lineWidth * pkg.web.pxr;
+			ctx.strokeRect(this.x * pkg.web.pxr, this.y * pkg.web.pxr, this.w * pkg.web.pxr, this.h * pkg.web.pxr);
+		}
+
+	});
+
+
+	/*
+		---------- [FillCircle]
+	*/
+
+	pkg.web.FillCircle = function() {
+		pkg.obj.FillCircle.apply(this, arguments);
+	};
+	pkg.inheritPrototype(pkg.web.FillCircle, pkg.obj.FillCircle);
+	pkg.addHash(pkg.web.FillCircle.prototype, {
+
+		draw:function(ctx) {
+		/* 描画する
+		   - p1 : 対象canvasのコンテキスト */
+
+			if (this.hidden == true) {
+				return false;
+			}
+			ctx.globalAlpha = this.alpha;
+			ctx.fillStyle = 'rgb(' + this.fill.r + ', ' + this.fill.g + ', ' + this.fill.b + ')';
+			ctx.beginPath();
+			ctx.arc(this.x * pkg.web.pxr, this.y * pkg.web.pxr, this.r * pkg.web.pxr, 0, Math.PI * 2.0, true);
+			ctx.fill();
+		}
+
+	});
+
+
+	/*
+		---------- [StrokeCircle]
+	*/
+
+	pkg.web.StrokeCircle = function() {
+		pkg.obj.StrokeCircle.apply(this, arguments);
+	};
+	pkg.inheritPrototype(pkg.web.StrokeCircle, pkg.obj.StrokeCircle);
+	pkg.addHash(pkg.web.StrokeCircle.prototype, {
+
+		draw:function(ctx) {
+		/* 描画する
+		   - p1 : 対象canvasのコンテキスト */
+
+			if (this.hidden == true) {
+				return false;
+			}
+			ctx.globalAlpha = this.alpha;
+			ctx.strokeStyle = 'rgb(' + this.stroke.r + ', ' + this.stroke.g + ', ' + this.stroke.b + ')';
+			ctx.lineCap = this.lineCap;
+			ctx.lineWidth = this.lineWidth * pkg.web.pxr;
+			ctx.beginPath();
+			ctx.arc(this.x * pkg.web.pxr, this.y * pkg.web.pxr, this.r * pkg.web.pxr, 0, Math.PI * 2.0, true);
+			ctx.stroke();
+		}
+
+	});
+
+
+	/*
+		---------- [FillRoundRect]
+	*/
+
+	pkg.web.FillRoundRect = function() {
+		pkg.obj.FillRoundRect.apply(this, arguments);
+	};
+	pkg.inheritPrototype(pkg.web.FillRoundRect, pkg.obj.FillRoundRect);
+	pkg.addHash(pkg.web.FillRoundRect.prototype, {
+
+		draw:function(ctx) {
+		/* 描画する
+		   - p1 : 対象canvasのコンテキスト */
+
+			if (this.hidden == true) {
+				return false;
+			}
+			ctx.globalAlpha = this.alpha;
+			ctx.fillStyle = 'rgb(' + this.fill.r + ', ' + this.fill.g + ', ' + this.fill.b + ')';
+			ctx.beginPath();
+			ctx.arc((this.x + this.r) * pkg.web.pxr, (this.y + this.r) * pkg.web.pxr,
+				this.r * pkg.web.pxr, - Math.PI, - 0.5 * Math.PI, false);
+			ctx.arc((this.x + this.w - this.r) * pkg.web.pxr, (this.y + this.r) * pkg.web.pxr,
+				this.r * pkg.web.pxr, - 0.5 * Math.PI, 0, false);
+			ctx.arc((this.x + this.w - this.r) * pkg.web.pxr, (this.y + this.h - this.r) * pkg.web.pxr,
+				this.r * pkg.web.pxr, 0, 0.5 * Math.PI, false);
+			ctx.arc((this.x + this.r) * pkg.web.pxr, (this.y + this.h - this.r) * pkg.web.pxr,
+				this.r * pkg.web.pxr, 0.5 * Math.PI, Math.PI, false);
+			ctx.fill();
+		}
+
+	});
+
+
+	/*
+		---------- [StrokeRoundRect]
+	*/
+
+	pkg.web.StrokeRoundRect = function() {
+		pkg.obj.StrokeRoundRect.apply(this, arguments);
+	};
+	pkg.inheritPrototype(pkg.web.StrokeRoundRect, pkg.obj.StrokeRoundRect);
+	pkg.addHash(pkg.web.StrokeRoundRect.prototype, {
+
+		draw:function(ctx) {
+		/* 描画する
+		   - p1 : 対象canvasのコンテキスト */
+
+			if (this.hidden == true) {
+				return false;
+			}
+			ctx.globalAlpha = this.alpha;
+			ctx.strokeStyle = 'rgb(' + this.stroke.r + ', ' + this.stroke.g + ', ' + this.stroke.b + ')';
+			ctx.lineWidth = this.lineWidth * pkg.web.pxr;
+			ctx.beginPath();
+			ctx.arc((this.x + this.r) * pkg.web.pxr, (this.y + this.r) * pkg.web.pxr,
+				this.r * pkg.web.pxr, - Math.PI, - 0.5 * Math.PI, false);
+			ctx.arc((this.x + this.w - this.r) * pkg.web.pxr, (this.y + this.r) * pkg.web.pxr,
+				this.r * pkg.web.pxr, - 0.5 * Math.PI, 0, false);
+			ctx.arc((this.x + this.w - this.r) * pkg.web.pxr, (this.y + this.h - this.r) * pkg.web.pxr,
+				this.r * pkg.web.pxr, 0, 0.5 * Math.PI, false);
+			ctx.arc((this.x + this.r) * pkg.web.pxr, (this.y + this.h - this.r) * pkg.web.pxr,
+				this.r * pkg.web.pxr, 0.5 * Math.PI, Math.PI, false);
+			ctx.moveTo(this.x * pkg.web.pxr, (this.y + this.h - this.r) * pkg.web.pxr);
+			ctx.lineTo(this.x * pkg.web.pxr, (this.y + this.r) * pkg.web.pxr);
+			ctx.stroke();
+		}
+
+	});
+
+
+	/*
+		---------- [DrawImage]
+	*/
+
+	pkg.web.DrawImage = function() {
+		pkg.obj.DrawImage.apply(this, arguments);
+
+		this.srcCanv = null;
+		this.srcX = 0;
+		this.srcY = 0;
+		this.srcW = 0;
+		this.srcH = 0;
+		this.scaleOpt = 0;
+	};
+	pkg.inheritPrototype(pkg.web.DrawImage, pkg.obj.DrawImage);
+	pkg.addHash(pkg.web.DrawImage.prototype, {
+
+		config:function(canv, opt, pxr_opt) {
+		/* 画像のコピー元を設定する
+		   - p1 : コピー元のcanvas要素
+		   - p2 : 等倍コピーオプション(=1 : 有効)
+		   - p3 : コピー元のピクセル密度を考慮する(=1 : 有効) */
+
+			this.srcCanv = canv;
+			this.scaleOpt = opt;
+			this.pxrOpt = pxr_opt;
+		},
+
+		draw:function(ctx) {
+		/* 描画する
+		   - p1 : 対象canvasのコンテキスト */
+
+			if (this.hidden == true) {
+				return false;
+			}
+			var optRate;
+			if (this.pxrOpt == 1) {
+				optRate = pkg.web.pxr;
+			} else {
+				optRate = 1;
+			}
+			ctx.globalAlpha = this.alpha;
+			if (this.scaleOpt == 1) {
+				ctx.drawImage(this.srcCanv,
+					this.srcX * optRate, this.srcY * optRate, this.w * pkg.web.pxr, this.h * pkg.web.pxr,
+					this.x * pkg.web.pxr, this.y * pkg.web.pxr, this.w * pkg.web.pxr, this.h * pkg.web.pxr);
+			} else {
+				ctx.drawImage(this.srcCanv,
+					this.srcX * optRate, this.srcY * optRate, this.srcW * optRate, this.srcH * optRate,
+					this.x * pkg.web.pxr, this.y * pkg.web.pxr, this.w * pkg.web.pxr, this.h * pkg.web.pxr);				
+			}
+		}
+
+	});
+
+
+	/*
+		---------- [Spinner]
+	*/
+
+	pkg.web.Spinner = function() {
+		pkg.obj.Spinner.apply(this, arguments);
+
+		this.rotateCnt = 0;
+	};
+	pkg.inheritPrototype(pkg.web.Spinner, pkg.obj.Spinner);
+	pkg.addHash(pkg.web.Spinner.prototype, {
+
+		draw:function(ctx) {
+		/* 描画する
+		   - p1 : 対象canvasのコンテキスト */
+
+			if (this.hidden == true) {
+				return false;
+			}
+			this.pieceW = Math.round(this.r * 0.1);
+			this.pieceH = Math.round(this.r * 0.25);
+			this.radius = this.r / 2;
+
+			// 状態を保存
+			ctx.save();
+
+			// 描画座標に移動
+			ctx.translate(this.x * pkg.web.pxr, this.y * pkg.web.pxr);
+
+			// 回転カウンタを進める
+			this.rotateCnt += this.amountCnt;
+			if (this.rotateCnt > 12) {
+				this.rotateCnt = 0;
+			}
+			ctx.rotate(30 * this.rotateCnt * Math.PI / 180);
+
+			for (var i = 0; i < 12; i ++) {
+				ctx.fillStyle = 'rgb(' + this.fill.r + ', ' + this.fill.g + ', ' + this.fill.b + ')';
+				ctx.globalAlpha = 1 / 12 * i;
+				ctx.beginPath();
+				ctx.moveTo((0 - this.pieceW / 4) * pkg.web.pxr,
+					(this.radius - this.pieceH) * pkg.web.pxr);
+				ctx.quadraticCurveTo(0 * pkg.web.pxr, (this.radius - this.pieceH - this.pieceW / 2) * pkg.web.pxr,
+					(0 + this.pieceW / 4) * pkg.web.pxr, (this.radius - this.pieceH) * pkg.web.pxr);
+				ctx.lineTo((0 + this.pieceW / 2) * pkg.web.pxr, (this.radius - this.pieceW / 3) * pkg.web.pxr);
+				ctx.quadraticCurveTo(0 * pkg.web.pxr, (this.radius + this.pieceW / 3) * pkg.web.pxr,
+					(0 - this.pieceW / 2) * pkg.web.pxr, (this.radius - this.pieceW / 3) * pkg.web.pxr);
+				ctx.closePath();
+				ctx.fill();
+				ctx.rotate(30 * Math.PI / 180);
+			}
+
+			// canvasの状態を元に戻す
+			ctx.rotate(-30 * this.rotateCnt * Math.PI / 180);
+			ctx.translate(-this.x / 2 * pkg.web.pxr, -this.y / 2 * pkg.web.pxr);
+			ctx.restore();
+		}
+
+	});
 
 
 
@@ -938,10 +1822,10 @@ var kashiwa = {};
 			var tmp;
 			if (this.enableQueue == true) {
 			// キューを使用する
-				tmp = kashiwa.clone(this.returnVal);
+				tmp = pkg.clone(this.returnVal);
 			} else {
 			// キューを使用しない
-				tmp = kashiwa.clone(this.currentKeyInfo);
+				tmp = pkg.clone(this.currentKeyInfo);
 			}
 
 			// 重複チェックの除外
@@ -955,48 +1839,47 @@ var kashiwa = {};
 
 
 	/*
-		---------- [GetInput]
+		---------- [InputChecker(Web)]
 	*/
 
-	pkg.GetInput = function(element, touch) {
-	/* - p1 : キーチェックを行うDOMエレメント
-	   - p2 : タッチデバイスフラグ(=true : タッチ有効化) */
-
-		this.canv = element;
-		this.touchFlg = touch;
-
-		this.init();
+	pkg.web.InputChecker = function() {
+		pkg.InputChecker.apply(this, arguments);
 	};
-	pkg.GetInput.prototype = {
+	pkg.inheritPrototype(pkg.web.InputChecker, pkg.InputChecker);
+	pkg.addHash(pkg.web.InputChecker.prototype, {
 
-		init:function() {
-		/* チェッカーを初期化する */
+		config:function(element) {
+			/* 対象要素を指定して初期化する
+			   - p1 : キーチェックを行うDOMエレメント */
 
-			this.mouseX = 0;
-			this.mouseY = 0;
-			this.mouseOnFlg = false;
-			this.mouseDownFlg = false;
+				this.canv = element;
+			   
+				this.mouseX = 0;
+				this.mouseY = 0;
+				this.mouseOnFlg = false;
+				this.mouseDownFlg = false;
 
-			this.event = document.createEvent("HTMLEvents");
-			this.event.initEvent("af_input", true, true);
-		},
+	//			this.event = document.createEvent("HTMLEvents");
+	//			this.event.initEvent("af_input", true, true);
+			},
 
 		start:function() {
 		/* キーチェックを開始する */
 
-			var curObj = this;
+			var _this = this;
 
 			if (this.touchFlg == true) {
 			// タッチデバイス
 				// TouchStart, TouchMove
 				var getTouchPosition = function(e) {
 					e.preventDefault();
-					curObj.mouseOnFlg = true;
-					curObj.mouseDownFlg = true;
-					var rect = curObj.canv.getBoundingClientRect();
-					curObj.mouseX = e.touches[0].pageX - rect.left;
-					curObj.mouseY = e.touches[0].pageY - rect.top;
-					curObj.dispatchInputEvent();
+					_this.mouseOnFlg = true;
+					_this.mouseDownFlg = true;
+					var rect = _this.canv.getBoundingClientRect();
+					_this.mouseX = e.touches[0].pageX - rect.left;
+					_this.mouseY = e.touches[0].pageY - rect.top;
+					// _this.dispatchInputEvent();
+					_this.sendInputData();
 				}
 				this.canv.ontouchstart = getTouchPosition;
 				this.canv.ontouchmove = getTouchPosition;
@@ -1004,71 +1887,86 @@ var kashiwa = {};
 				// TouchEnd
 				var getTouchEnd = function(e) {
 					e.preventDefault();
-					curObj.mouseDownFlg = false;
-					curObj.dispatchInputEvent();
+					_this.mouseDownFlg = false;
+					// _this.dispatchInputEvent();
+					_this.sendInputData();
 				}
 				this.canv.ontouchend = getTouchEnd;
 			} else {
 			// 非タッチデバイス
 				// MouseOver, MouseMove
 				var getMousePosition = function(e) {
-					curObj.mouseOnFlg = true;
-					var rect = curObj.canv.getBoundingClientRect();
-					curObj.mouseX = e.clientX - rect.left;
-					curObj.mouseY = e.clientY - rect.top;
-					curObj.dispatchInputEvent();
+					_this.mouseOnFlg = true;
+					var rect = _this.canv.getBoundingClientRect();
+					_this.mouseX = e.clientX - rect.left;
+					_this.mouseY = e.clientY - rect.top;
+					// _this.dispatchInputEvent();
+					_this.sendInputData();
 				}
 				this.canv.onmousemove = getMousePosition;
 				this.canv.onmouseover = getMousePosition;
 
 				// MouseUp
 				var getMouseUp = function(e) {
-					curObj.mouseDownFlg = false;
-					curObj.dispatchInputEvent();
+					_this.mouseDownFlg = false;
+					// _this.dispatchInputEvent();
+					_this.sendInputData();
 				}
 				this.canv.onmouseup = getMouseUp;
 
 				// MouseDown
 				var getMouseDown = function(e) {
-					curObj.mouseDownFlg = true;
-					curObj.dispatchInputEvent();
+					_this.mouseDownFlg = true;
+					// _this.dispatchInputEvent();
+					_this.sendInputData();
 				}
 				this.canv.onmousedown = getMouseDown;
 			}
 
 			// MouseOut
 			var getMouseOut = function(e) {
-				curObj.mouseOnFlg = false;
-				curObj.dispatchInputEvent();
+				_this.mouseOnFlg = false;
+				// _this.dispatchInputEvent();
+				_this.sendInputData();
 			}
 			this.canv.onmouseout = getMouseOut;
 		},
 
-		dispatchInputEvent:function() {
+//		dispatchInputEvent:function() {
+//		/* 入力イベントの送信 */
+//
+//			this.canv.dispatchEvent(this.event);
+//		},
+
+		sendInputData:function() {
 		/* 入力イベントの送信 */
 
-			this.canv.dispatchEvent(this.event);
+			var tmp = this.getVals();
+			this.keyHandler([
+				tmp.mouseX, tmp.mouseY,
+				tmp.mouseOnFlg, tmp.mouseDownFlg
+				]);
 		},
 
 		getVals:function() {
 		/* キー入力値を返す */
 
-			var curObj = this;
+			var _this = this;
 			var vals = {};
 			(function(inside) {
-				if ((curObj.touchFlg == true) && (curObj.mouseDownFlg == false)) {
+				if ((_this.touchFlg == true) && (_this.mouseDownFlg == false)) {
 				// タッチデバイスでタッチされていない時
 					inside.mouseX = -1;
 					inside.mouseY = -1;
-				} else if ((curObj.touchFlg == false) && (curObj.mouseOnFlg == false)) {
+				} else if ((_this.touchFlg == false) && (_this.mouseOnFlg == false)) {
 					inside.mouseX = -1;
 					inside.mouseY = -1;
 				} else {
-					inside.mouseX = curObj.mouseX;
-					inside.mouseY = curObj.mouseY;
+					inside.mouseX = _this.mouseX;
+					inside.mouseY = _this.mouseY;
 				}
-				inside.mouseOnFlg = curObj.mouseOnFlg;
-				inside.mouseDownFlg = curObj.mouseDownFlg;
+				inside.mouseOnFlg = _this.mouseOnFlg;
+				inside.mouseDownFlg = _this.mouseDownFlg;
 			})(vals);
 
 			return (vals);
@@ -1097,8 +1995,8 @@ var kashiwa = {};
 			// MouseOut
 			this.canv.onmouseout = null;
 		}
-
-	};
+	
+	});
 
 
 
@@ -1183,7 +2081,7 @@ var kashiwa = {};
 		   - p1 : 読み込み完了時に実行する関数
 		   - p2 : 読み込みエラー時に実行する関数 */
 
-			var curObj = this;
+			var _this = this;
 
 			this.funcOnLoad = fn_onload;
 			this.funcOnError = fn_onerror;
@@ -1225,23 +2123,23 @@ var kashiwa = {};
 			}
 
 			function xhrHandler() {
-				if (curObj.xhr.readyState == 4) {
-					if ((curObj.xhr.status == 200) || (curObj.xhr.status == 201)) {
+				if (_this.xhr.readyState == 4) {
+					if ((_this.xhr.status == 200) || (_this.xhr.status == 201)) {
 					// データ取得完了
-						curObj.state = 1;
-						if (curObj.funcOnLoad) {
-							curObj.funcOnLoad();
+						_this.state = 1;
+						if (_this.funcOnLoad) {
+							_this.funcOnLoad();
 						}
 					} else {
 					// エラー
-						curObj.state = 2;
-						if (curObj.funcOnError) {
-							curObj.funcOnError();
+						_this.state = 2;
+						if (_this.funcOnError) {
+							_this.funcOnError();
 						}
 					}
-				} else if ((curObj.xhr.readyState == 2) || (curObj.xhr.readyState == 3)) {
+				} else if ((_this.xhr.readyState == 2) || (_this.xhr.readyState == 3)) {
 				// 受信処理中
-					curObj.state = 0;
+					_this.state = 0;
 				}
 			};
 		},
@@ -1816,10 +2714,10 @@ var kashiwa = {};
 		   - return ( [シート上のX座標, Y座標, 横幅, 高さ] ) */
 
 			var info = [
-				Math.floor(this.picPosX[id]),
-				Math.floor(this.picPosY[id]),
-				Math.floor(this.picSizeW[id]),
-				Math.floor(this.picSizeH[id])
+				Math.floor(this.picPosX[id] / this.dispPxr),
+				Math.floor(this.picPosY[id] / this.dispPxr),
+				Math.floor(this.picSizeW[id] / this.dispPxr),
+				Math.floor(this.picSizeH[id] / this.dispPxr)
 			];
 			return (info);
 		}
@@ -1831,16 +2729,18 @@ var kashiwa = {};
 		---------- [ThumbController]
 	*/
 
-	pkg.ThumbController = function(canvas, size_w, size_h, sp_max) {
+	pkg.ThumbController = function(canvas, size_w, size_h, sp_max, pxr) {
 	/* - p1 : バッファとして使うCanvas
-	   - p2 : スプライトの幅(ピクセル実寸)
-	   - p3 : スプライトの高さ(ピクセル実寸)
-	   - p4 : 使用するスプライト数の上限 */
+	   - p2 : スプライトの幅(ピクセル密度適用前)
+	   - p3 : スプライトの高さ(ピクセル密度適用前)
+	   - p4 : 使用するスプライト数の上限
+	   - p5 : ディスプレイのピクセル密度 */
 
 		this.canv = canvas;
 		this.ctx = this.canv.getContext('2d');
-		this.picSizeW = Math.floor(size_w) + 1;
-		this.picSizeH = Math.floor(size_h) + 1;
+		this.dispPxr = pxr;
+		this.picSizeW = Math.floor(size_w) * this.dispPxr + 1;
+		this.picSizeH = Math.floor(size_h) * this.dispPxr + 1;
 		this.spriteMax = sp_max;
 
 		this.init();
@@ -1907,8 +2807,8 @@ var kashiwa = {};
 		   - p1 : バッファID
 		   - return ( [シート上のX座標, Y座標] ) */
 
-			var tmp_x = Math.floor(this.bufPos[buf_id][0]);
-			var tmp_y = Math.floor(this.bufPos[buf_id][1]);
+			var tmp_x = Math.floor(this.bufPos[buf_id][0] / this.dispPxr);
+			var tmp_y = Math.floor(this.bufPos[buf_id][1] / this.dispPxr);
 
 			return ([tmp_x, tmp_y]);
 		}
@@ -1918,110 +2818,8 @@ var kashiwa = {};
 
 
 	/* --------------------
-	    表示・演出
+	    インタラクション
 	-------------------- */
-
-	/*
-		---------- [LoadingAnime]
-	*/
-
-	pkg.LoadingAnime = function(canv_ctx, device_pxr, cnt_max) {
-	/* - p1 : 対象Canvasのコンテキスト
-	   - p2 : デバイスのピクセル密度
-	   - p3 : アニメーションカウンタの最大値 */
-
-		this.ctx = canv_ctx;
-		this.pxr = device_pxr;
-		this.cntMax = cnt_max;
-		this.cnt = 0;
-
-		this.rotateCnt = 0;
-		this.posX = 0;
-		this.posY = 0;
-		this.size = 100;
-		this.pieceW = Math.round(this.size * 0.1);
-		this.pieceH = Math.round(this.size * 0.25);
-		this.radius = this.size / 2;
-		this.color = 'rgb(0, 0, 0)';
-	};
-	pkg.LoadingAnime.prototype = {
-
-		changePos:function(x, y) {
-		/* 表示位置を変更する
-		   - p1 : X座標
-		   - p2 : Y座標 */
-
-			this.posX = x;
-			this.posY = y;
-		},
-
-		changeSize:function(w) {
-		/* 表示サイズを変更する
-		   - p1 : 一辺のサイズ */
-
-			this.size = w;
-			this.pieceW = Math.round(this.size * 0.1);
-			this.pieceH = Math.round(this.size * 0.25);
-			this.radius = this.size / 2;
-		},
-
-		changeColor:function(col) {
-		/* 表示カラーを変更する
-		   - p1 : カラー指定 */
-
-			this.color = col;
-		},
-
-		update:function(cnt) {
-		/* 表示を更新する */
-
-			// カウンタを進める
-			var amountCnt = 0;
-			this.cnt += cnt;
-			if (this.cnt >= this.cntMax) {
-				while (this.cnt >= this.cntMax) {
-					this.cnt -= this.cntMax;
-					amountCnt ++;
-				}
-			}
-
-			// 状態を保存
-			this.ctx.save();
-
-			// 描画座標に移動
-			this.ctx.translate(this.posX * this.pxr, this.posY * this.pxr);
-
-			// 回転カウンタを進める
-			this.rotateCnt += amountCnt;
-			if (this.rotateCnt > 12) {
-				this.rotateCnt = 0;
-			}
-			this.ctx.rotate(30 * this.rotateCnt * Math.PI / 180);
-
-			for (var i = 0; i < 12; i ++) {
-				this.ctx.fillStyle = this.color;
-				this.ctx.globalAlpha = 1 / 12 * i;
-				this.ctx.beginPath();
-				this.ctx.moveTo((0 - this.pieceW / 4) * this.pxr,
-					(this.radius - this.pieceH) * this.pxr);
-				this.ctx.quadraticCurveTo(0 * this.pxr, (this.radius - this.pieceH - this.pieceW / 2) * this.pxr,
-					(0 + this.pieceW / 4) * this.pxr, (this.radius - this.pieceH) * this.pxr);
-				this.ctx.lineTo((0 + this.pieceW / 2) * this.pxr, (this.radius - this.pieceW / 3) * this.pxr);
-				this.ctx.quadraticCurveTo(0 * this.pxr, (this.radius + this.pieceW / 3) * this.pxr,
-					(0 - this.pieceW / 2) * this.pxr, (this.radius - this.pieceW / 3) * this.pxr);
-				this.ctx.closePath();
-				this.ctx.fill();
-				this.ctx.rotate(30 * Math.PI / 180);
-			}
-
-			// canvasの状態を元に戻す
-			this.ctx.rotate(-30 * this.rotateCnt * Math.PI / 180);
-			this.ctx.translate(-this.posX / 2 * this.pxr, -this.posY / 2 * this.pxr);
-			this.ctx.restore();
-		}
-
-	};
-
 
 	/*
 		---------- [ButtonController]
@@ -2270,198 +3068,6 @@ var kashiwa = {};
 		write:function(val) {
 			this.outputObj.innerHTML = val;
 		}
-	};
-
-
-
-	/* --------------------
-	    各種関数の定義
-	-------------------- */
-
-	pkg.addHash = function(val, hash) {
-	/* 連想配列を追加する
-	   - p1 : 追加先の変数
-	   - p2 : 連想配列リスト */
-
-		for (var key in hash) {
-			val[key] = hash[key];
-		}
-	};
-
-	pkg.inheritPrototype = function(child, parent) {
-	/* プロトタイプを継承する
-	   - p1 : 継承先のクラス
-	   - p2 : 継承元のクラス */
-
-		var tmp = function tmp() {};
-		tmp.prototype = parent.prototype;
-		child.prototype = new tmp();
-	};
-
-	pkg.clone = function(src) {
-	/* 配列変数をディープコピーする
-	   - p1 : コピー元の変数 */
-
-		var ret;
-		if (src.constructor === Array) {
-			ret = [];
-		} else if (src.constructor === Object) {
-			ret = {};
-		} else {
-			return (src);
-		}
-		for (var key in src) {
-			ret[key] = this.clone(src[key]);
-		}
-		return (ret);
-	};
-
-	pkg.getRankList = function(list, mode) {
-	/* 配列のIDを値の大小で並べ替える(同値はIDの若い方が優位)
-	   - p1 : 数値リスト
-	   - p2 : 判定方式(false= 昇順/ true= 降順) */
-
-		var data = pkg.clone(list);
-		var idList = new Array();
-		var n, i, j;
-		for (i = 0; i < data.length; i ++) {
-			idList[i] = i;
-		}
-
-		for (i = 0; i < data.length - 1; i ++) {
-			for (j = i + 1; j < data.length; j ++) {
-				if (mode == false) {
-					if (data[j] < data[i]) {
-						// 値を入れ替え
-						n = data[j];
-						data[j] = data[i];
-						data[i] = n;
-
-						// IDを入れ替え
-						n = idList[j];
-						idList[j] = idList[i];
-						idList[i] = n;
-					}
-				} else {
-					if (data[j] > data[i]) {
-						// 値を入れ替え
-						n = data[j];
-						data[j] = data[i];
-						data[i] = n;
-
-						// IDを入れ替え
-						n = idList[j];
-						idList[j] = idList[i];
-						idList[i] = n;
-					}
-				}
-			}
-		}
-
-		return (idList);
-	},
-
-	pkg.replaceVals = function(string, list) {
-	/* コードを数値に置き換える
-	   - p1 : 置き換える文字列
-	   - p2 : 数値リスト */
-
-		var tmpStr = string;
-		for (var n = 1; n <= list.length; n ++) {
-			tmpStr = tmpStr.replace('<$' + n + '>', list[n - 1]);
-		}
-		return (tmpStr);
-	};
-
-	pkg.calcPhotoSize = function(inputW, inputH, frameW, frameH, mode) {
-	/* 画像の拡縮サイズを算出する
-	   - p1 : 元画像の幅
-	   - p2 : 元画像の高さ
-	   - p3 : 収めたい枠の幅
-	   - p4 : 収めたい枠の高さ
-	   - p5 : オプション(false= 拡大を許す / true= 縮小のみ)
-	   - return ( [拡縮後の幅, 拡縮後の高さ] ) */
-
-		if (mode == true) {
-		// 原寸以下で表示
-
-			// 初期値
-			tmpRate = 1;
-			if ((inputW > frameW) || (inputH > frameH)) {
-				// 幅に合わせた場合の倍率
-				tmpRate = frameW / inputW;
-				if (inputH * tmpRate > frameH) {
-					// 高さに合わせた場合の倍率
-					tmpRate = frameH / inputH;
-				}
-			}
-		} else {
-		// 拡大を許す
-
-			// 幅に合わせた場合の倍率
-			tmpRate = frameW / inputW;
-			if (inputH * tmpRate > frameH) {
-				// 高さに合わせた場合の倍率
-				tmpRate = frameH / inputH;
-			}
-		}
-
-		return ([Math.floor(inputW * tmpRate), Math.floor(inputH * tmpRate)]);
-	};
-
-	pkg.calcThumbSize = function(orig_w, orig_h, max_w, max_h) {
-	/* 画像のトリミングサイズを算出する
-	   - p1 : 元画像の幅
-	   - p2 : 元画像の高さ
-	   - p3 : 収めたい枠の幅
-	   - p4 : 収めたい枠の高さ
-	   - return ( [切出後の最終的な幅, 切出後の最終的な高さ, 縮小する幅, 縮小する高さ] ) */
-
-		var resizerate;
-		var out_trim_w;
-		var out_trim_h;
-		var out_small_w;
-		var out_small_h;
-
-		// サムネイルの切り出しエリアを算出
-		resizerate = max_h / max_w;
-		out_width = orig_w;
-		out_height = Math.floor(orig_w * resizerate);
-		if (out_height > orig_h) {
-			out_height = orig_h;
-			out_width = Math.floor(orig_h / resizerate);
-		}
-		out_trim_w = out_width;
-		out_trim_h = out_height;
-
-		// 縮小後のサムネイルサイズを算出
-		resizerate = max_w / orig_w;
-		out_width = max_w;
-		out_height = Math.floor(orig_h * resizerate);
-		if (out_height < max_h) {
-			resizerate = max_h / orig_h;
-			out_height = max_h;
-			out_width = Math.floor(orig_w * resizerate);
-		}
-		out_small_w = out_width;
-		out_small_h = out_height;
-
-		return ([out_trim_w, out_trim_h, out_small_w, out_small_h]);
-	};
-
-	pkg.addEvent = function(ev_name) {
-	/* カスタムイベントを発生させる
-	   - p1 : イベント名 */
-
-		var customEvent = document.createEvent("HTMLEvents");
-		customEvent.initEvent(ev_name, true, false);
-		window.dispatchEvent(customEvent);
-	};
-
-	pkg.hideAddrBar = function() {
-	/* アドレスバーを隠す */
-
-		window.scrollTo(0,1);
 	};
 
 
