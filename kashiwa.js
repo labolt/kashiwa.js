@@ -1,8 +1,8 @@
-/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+﻿/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
      kashiwa.js
    ──────────────────────────────
-     Ver. 6.0.0
-     Copyright(c) 2014-2018 ARINOKI
+     Ver. 7.2.1
+     Copyright(c) 2014-2020 ARINOKI
      Released under the MIT license
      http://opensource.org/licenses/mit-license.php
    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
@@ -25,6 +25,10 @@
      |
      + [表示オブジェクトの定義]
      |  |
+     |  + Group
+     |  |
+     |  + ButtonFrame
+     |  |
      |  + Text
      |  |
      |  + FillRect
@@ -38,6 +42,8 @@
      |  + FillRoundRect
      |  |
      |  + StrokeRoundRect
+     |  |
+     |  + DrawSVG
      |  |
      |  + DrawImage
      |  |
@@ -45,6 +51,10 @@
      |
      + [表示オブジェクトの定義(Web)]
      |  |
+     |  + Group
+     |  |
+     |  + ButtonFrame
+     |  |
      |  + Text
      |  |
      |  + FillRect
@@ -58,6 +68,8 @@
      |  + FillRoundRect
      |  |
      |  + StrokeRoundRect
+     |  |
+     |  + DrawSVG
      |  |
      |  + DrawImage
      |  |
@@ -68,6 +80,8 @@
      |  + DeviceInfo
      |  |
      |  + WindowController
+     |  |
+     |  + CanvasController
      |
      + [キー入力の制御]
      |  |
@@ -87,6 +101,8 @@
      |
      + [画像の制御]
      |  |
+     |  + SVGLoader
+     |  |
      |  + PictureLoader
      |  |
      |  + PictureController
@@ -94,8 +110,6 @@
      |  + ThumbController
      |
      + [インタラクション]
-     |  |
-     |  + ButtonController
      |  |
      |  + Easing
      |
@@ -199,14 +213,14 @@ var kashiwa = {};
 		return (idList);
 	},
 
-	pkg.replaceVals = function(string, list) {
-	/* コードを数値に置き換える
-	   - p1 : 置き換える文字列
-	   - p2 : 数値リスト */
+	pkg.replaceStr = function(string, list) {
+	/* コードを既定の文字列に置き換える
+	   - p1 : 置き換え元の文字列
+	   - p2 : 文言リスト */
 
 		var tmpStr = string;
-		for (var n = 1; n <= list.length; n ++) {
-			tmpStr = tmpStr.replace('<$' + n + '>', list[n - 1]);
+		for (var name in list) {
+			tmpStr = tmpStr.replace('<$' + name + '>', list[name]);
 		}
 		return (tmpStr);
 	};
@@ -313,48 +327,126 @@ var kashiwa = {};
 	*/
 
 	pkg.Main_Template = function() {
-		this.frameTimer = new kashiwa.FrameTimer();
-		this.reqFrame = null;
-		this.flgRunning = false;
-		this.getReqAniFrame();
+		this.initDefault();
 	};
 	pkg.Main_Template.prototype = {
 
-		init:function() {
-		/* 状態を初期化 */
+		initDefault:function() {
+		/* デフォルト状態を初期化 */
 
-			this.start();
+			this.def = {}; // 状態定義
+			this.val = {}; // 状態変数
+
+			// デバイス情報の取得
+			this.dInfo = new kashiwa.DeviceInfo();
+
+			// パラメータ値の取得
+			var prms = new kashiwa.UrlParam();
+			this.def.prms = {};
+			this.def.prms.ui  = prms.get("ui");
+			this.def.prms.pxr = prms.get("pxr");
+
+			// デバイスの正しいピクセル密度を保存
+			this.def.deviceOrigPxr = this.dInfo.getInfo().devicePxr;
+			// ピクセル密度のエミュレーション
+			if (this.def.prms.pxr) {
+				if (parseFloat(this.def.prms.pxr) > 0) {
+					this.dInfo.emulateDevicePxr(1.5);
+				}
+			}
+			// ピクセル密度
+			this.def.pxr = this.dInfo.getInfo().devicePxr;
+
+			// ブラウザの言語
+			this.browserLang = null;
+			this.getBrowserLang();
+
+			// イベント制御
+			this.regInputEvent();
+
+			// アニメーション制御用
+			this.frameTimer = new kashiwa.FrameTimer();
+			this.reqFrame = null;
+			this.flgRunning = false;
+			this.getReqAniFrame();
+
+			// リサイズ時の挙動を設定する
+			this.winCtrl = new kashiwa.web.WindowController();
+			this.winCtrl.init();
 		},
 
-		repeatFunc:function() {
-		/* 繰り返し処理 */
-
-			// フレームの更新
-			var frameCnt = this.frameTimer.update();
-			this.transCnt += frameCnt;
-		},
-
-		startReqAniFrame:function() {
-		/* requestAnimationFrameを開始 */
+		regInputEvent:function() {
+		/* 入力イベントを登録する */
 
 			var _this = this;
-			this.repeatFunc();
-			if (this.flgRunning == true) {
-				this.reqFrame = window.requestAnimationFrame(function() { _this.startReqAniFrame(); });
+			window.addEventListener("inputtedSomething", function() {
+				_this.inputEventHandler();
+			}, false);
+			window.addEventListener("startSceneRedraw", function() {
+				_this.startSceneRedraw();
+			}, false);
+			window.addEventListener("stopSceneRedraw", function() {
+				_this.stopSceneRedraw();
+			}, false);
+		},
+
+		inputEventHandler:function() {
+		/* 入力イベントに応じた処理を行う(各アプリケーションで定義) */
+
+			return false;
+		},
+
+		startSceneRedraw:function() {
+		/* シーンの再描画開始を制御する */
+
+			if (this.flgRunning == false) {
+				this.start();
 			}
 		},
 
-		start:function() {
-		/* 繰り返し処理の開始 */
+		stopSceneRedraw:function() {
+		/* シーンの再描画停止を制御する */
 
-			this.flgRunning = true;
-			this.startReqAniFrame();
+			if (this.flgRunning == true) {
+				this.stop();
+			}
 		},
 
-		stop:function() {
-		/* 繰り返し処理の停止 */
+		defStrings:function(list) {
+		/* 表示文言を定義する
+		   - p1 : 表示文言を定義したオブジェクト */
 
-			this.flgRunning = false;
+			this.def.strings = list;
+
+			// 与えられた文言リストの中でどの言語を使うかを決める
+			var flag = false;
+			for (var name in this.def.strings) {
+				// ブラウザ言語コードの前方一致でみる
+				if (this.browserLang.indexOf(name) == 0) {
+					this.lang = name;
+					flag = true;
+				}
+			}
+			if (flag == false) {
+				this.lang = 'en';
+			}
+		},
+
+		defImgPath:function(path) {
+		/* 画像パーツのパスを定義する
+		   - p1 : 画像を配置しているディレクトリの相対パス */
+
+		   this.def.imgPath = path;
+		},
+
+		getBrowserLang:function() {
+		/* ブラウザの言語を取得する */
+
+			this.browserLang =
+				(window.navigator.languages && window.navigator.languages[0]) ||
+	        	window.navigator.language ||
+	        	window.navigator.userLanguage ||
+	        	window.navigator.browserLanguage;
 		},
 
 		getReqAniFrame:function() {
@@ -381,36 +473,44 @@ var kashiwa = {};
 			window.cancelAnimationFrame = this.cancelAnimationFrame;
 		},
 
-		resizeHandler:function() {
-		/* リサイズ時の処理 */
+		init:function() {
+		/* 状態を初期化(各アプリケーションで定義) */
 
 			return false;
 		},
 
-		getResized:function(dInfo) {
-		/* リサイズの取得 */
+		repeatFunc:function() {
+		/* 繰り返し処理 */
+
+			// フレームの更新
+			var frameCnt = this.frameTimer.update();
+			this.transCnt += frameCnt;
+		},
+
+		startReqAniFrame:function() {
+		/* requestAnimationFrameを開始 */
 
 			var _this = this;
-			if ((dInfo.getOS() == 1) || ((dInfo.getOS() == 2) && (dInfo.getBrowser() == 4))) {
-				// iOS, Android(Chrome)
-				window.addEventListener("orientationchange", function() {
-					_this.resizeHandler();
-				}, false);
+			this.repeatFunc();
+			if (this.flgRunning == true) {
+				this.reqFrame = window.requestAnimationFrame(function() { _this.startReqAniFrame(); });
 			}
-			if ((dInfo.getOS() == 0) || (dInfo.getOS() == 2) || (dInfo.getOS() == 3)) {
-				window.addEventListener("resize", function() {
-					if ((dInfo.getOS() == 0) || (dInfo.getOS() == 3)) {
-						// PC, WindowsPhone
-						_this.resizeHandler();
-					} else if ((dInfo.getOS() == 2) && ((dInfo.getBrowser() == 0) || (dInfo.getBrowser() == 2))) {
-						// Android(標準ブラウザ), Android(Opera)
-						var tmpW = Math.floor(window.outerWidth / window.devicePixelRatio);
-						if (tmpW != dInfo.getScale(0)) {
-							_this.resizeHandler();
-						}
-					}
-				}, false);
-			}
+		},
+
+		start:function() {
+		/* 繰り返し処理の開始 */
+
+			// console.log("start");
+			this.flgRunning = true;
+			this.frameTimer.resetTimer();
+			this.startReqAniFrame();
+		},
+
+		stop:function() {
+		/* 繰り返し処理の停止 */
+
+			// console.log("stop");
+			this.flgRunning = false;
 		}
 
 	};
@@ -441,6 +541,12 @@ var kashiwa = {};
 			this.beforeTime = Date.now();
 			this.currentTime = 0;
 			this.drawStock = 0;
+		},
+
+		resetTimer:function() {
+		/* タイマーをリセットする */
+
+			this.beforeTime = Date.now();
 		},
 
 		update:function() {
@@ -490,36 +596,94 @@ var kashiwa = {};
 			this.initFunc();
 		},
 
-		draw:function(ctx) {
+		draw:function(canv) {
 		/* 登録オブジェクトを全て描画する
-		   - p1 : 対象canvasのコンテキスト */
+		   - p1 : 対象のCanvasControllerオブジェクト */
 
-//			for (i = this.objects.length - 1; i >= 0; i --) {
-			for (i = 0; i < this.objects.length; i ++) {
-				this.objects[i].draw(ctx);
+			for (var i = 0; i < this.objects.length; i ++) {
+				this.objects[i].draw(canv);
+			}
+		},
+
+		check:function() {
+		/* オブジェクトの入力状態を確認する */
+
+			for (var i = 0; i < this.objects.length; i ++) {
+				if ((this.objects[i].type == "ButtonFrame") || (this.objects[i].type == "Group")) {
+					this.objects[i].check();
+				}
+			}
+		},
+
+		startChecker:function() {
+		/* 入力チェックを開始する */
+
+			for (var i = 0; i < this.objects.length; i ++) {
+				if ((this.objects[i].type == "ButtonFrame") || (this.objects[i].type == "Group")) {
+					this.objects[i].startChecker();
+				}
+			}
+		},
+
+		stopChecker:function() {
+		/* 入力チェックを停止する */
+
+			for (var i = 0; i < this.objects.length; i ++) {
+				if ((this.objects[i].type == "ButtonFrame") || (this.objects[i].type == "Group")) {
+					this.objects[i].stopChecker();
+				}
 			}
 		},
 
 		open:function() {
 		/* オープン時 */
 
-			this.transitionState = 0;
-			this.transitionCnt = 0;
+			if (this.openFrameMax > 0) {
+				this.transitionState = 0;
+				this.transitionCnt = 0;
 
-			this.openFunc();
+				this.openFunc();
+			} else {
+			// 遷移アニメの長さが0の場合(= 即時遷移完了する)
+				this.transitionState = 1;
+				this.transitionCnt = 0;
+				this.sceneCtrl.transitionHandler();
+				this.transitionCompletedOpEx();
+			}
 		},
 
 		close:function() {
 		/* クローズ時 */
 
-			this.transitionState = 2;
-			this.transitionCnt = 0;
+			if (this.closeFrameMax > 0) {
+			// 遷移アニメの長さが1以上の場合
+				this.transitionState = 2;
+				this.transitionCnt = 0;
 
-			this.closeFunc();
+				this.closeFunc();
+			} else {
+			// 遷移アニメの長さが0の場合(= 即時遷移完了する)
+				this.transitionState = -1;
+				this.transitionCnt = 0;
+				this.sceneCtrl.transitionHandler();
+				this.transitionCompletedClEx();
+			}
+		},
+
+		checkInput:function() {
+		/* 入力チェック */
+
+		},
+
+		resize:function() {
+		/* 領域サイズの変更に対応する */
+
 		},
 
 		update:function(rate) {
-		/* 画面更新,入力チェック */
+		/* 画面更新 */
+
+			this.checkInput();
 
 			this.transitionRate = rate;
 			this.updateFunc();
@@ -589,66 +753,68 @@ var kashiwa = {};
 			   - =  3 : opening */
 		this.currentId = null;
 		this.nextId = null;
-
-		this.listScene = new Array();
-		this.listUI = new Array();
-		this.relatedIdsUI = new Array();
-		this.listBg = new Array();
-		this.relatedIdsBg = new Array();
+		this.scenes = new Array();
 		this.queueList = new Array();
 	};
 	pkg.SceneController.prototype = {
 
 		init:function(sc_list) {
 		/* コントローラを初期化する
-		   - p1 : シーンインスタンスのリスト[Array] */
+		   - p1 : Sceneオブジェクト(Bg,UIの関連構造を含む)のリスト[Array]
+		          - sc:Sceneインスタンス(省略不可)
+		          - ui:UI用のSceneインスタンス(省略可)
+		          - bg:Bg用のSceneインスタンス(省略可) */
 
-			this.listScene = [];
+			this.scenes = [];
 			for (var i = 0; i < sc_list.length; i ++) {
-				this.listScene[i] = sc_list[i];
+				this.scenes[i] = sc_list[i];
 			}
 			this.state = -1;
 			this.currentId = 0;
+		},
+
+		start:function(sc_id) {
+		/* シーンの制御を開始する */
+
+			if (sc_id) {
+				this.currentId = sc_id;
+			}
 			this.enqueueScene(this.currentId);
 		},
 
-		registerUI:function(ui_list, id_list) {
-		/* UIを登録する
-		   - p1 : UIインスタンスのリスト[Array]
-		   - p2 : 各シーンに対するp1項目の紐付け[Array]
-		          対応するUIインスタンスを指定しない場合は -1 とする */
+		checkInput:function() {
+		/* シーンの入力を確認する */
 
-			for (var i = 0; i < ui_list.length; i ++) {
-				this.listUI[i] = ui_list[i];
+			if (this.scenes[this.currentId].bg) {
+				this.scenes[this.currentId].bg.checkInput();
 			}
-			for (var i = 0; i < this.listScene.length; i ++) {
-				this.relatedIdsUI[i] = id_list[i];
+			this.scenes[this.currentId].sc.checkInput();
+			if (this.scenes[this.currentId].ui) {
+				this.scenes[this.currentId].ui.checkInput();
 			}
 		},
 
-		registerBg:function(bg_list, id_list) {
-		/* 背景を登録する
-		   - p1 : 背景インスタンスのリスト[Array]
-		   - p2 : 各シーンに対するp1項目の紐付け[Array]
-		          対応する背景インスタンスを指定しない場合は -1 とする */
+		resize:function() {
+		/* シーンのサイズ変更を制御する */
 
-			for (var i = 0; i < bg_list.length; i ++) {
-				this.listBg[i] = bg_list[i];
+			if (this.scenes[this.currentId].bg) {
+				this.scenes[this.currentId].bg.resize();
 			}
-			for (var i = 0; i < this.listScene.length; i ++) {
-				this.relatedIdsBg[i] = id_list[i];
+			this.scenes[this.currentId].sc.resize();
+			if (this.scenes[this.currentId].ui) {
+				this.scenes[this.currentId].ui.resize();
 			}
 		},
 
 		update:function(rate) {
 		/* シーンをアップデートする */
 
-			if (this.relatedIdsBg[this.currentId] != -1) {
-				this.listBg[this.relatedIdsBg[this.currentId]].update(rate);
+			if (this.scenes[this.currentId].bg) {
+				this.scenes[this.currentId].bg.update(rate);
 			}
-			this.listScene[this.currentId].update(rate);
-			if (this.relatedIdsUI[this.currentId] != -1) {
-				this.listUI[this.relatedIdsUI[this.currentId]].update(rate);
+			this.scenes[this.currentId].sc.update(rate);
+			if (this.scenes[this.currentId].ui) {
+				this.scenes[this.currentId].ui.update(rate);
 			}
 		},
 
@@ -657,6 +823,7 @@ var kashiwa = {};
 		   - p1 : 追加するシーンid */
 
 			this.queueList.push(id);
+			pkg.addEvent("startSceneRedraw");
 		},
 
 		dequeueScene:function() {
@@ -667,6 +834,7 @@ var kashiwa = {};
 				return (-1);
 			}
 			if (this.state == -1) {
+			// 初回のシーンオープン時
 				this.nextId = this.queueList.shift();
 				this.state = 2;
 				startFlg = true;
@@ -678,58 +846,70 @@ var kashiwa = {};
 			}
 			if (this.state == 0) {
 				// 現在のシーンをクローズ
+				this.state = 1;
 				this.transCnt = 0;
 				this.nextId = this.queueList.shift();
-				this.listScene[this.currentId].close();
-				if (this.relatedIdsBg[this.currentId] == this.relatedIdsBg[this.nextId]) {
-					this.transCnt ++;
+				this.scenes[this.currentId].sc.close();
+
+				// Bgのクローズ
+				if (this.scenes[this.currentId].bg == this.scenes[this.nextId].bg) {
+					this.transitionHandler();
 				} else {
-					if (this.relatedIdsBg[this.currentId] != -1) {
-						this.listBg[this.relatedIdsBg[this.currentId]].close();
+					if (this.scenes[this.currentId].bg) {
+						this.scenes[this.currentId].bg.close();
 					} else {
 						// Bgが存在しない場合は即時遷移完了とする
 						this.transitionHandler();
 					}
 				}
-				if (this.relatedIdsUI[this.currentId] == this.relatedIdsUI[this.nextId]) {
-					this.transCnt ++;
+
+				// UIのクローズ
+				if (this.scenes[this.currentId].ui == this.scenes[this.nextId].ui) {
+					this.transitionHandler();
 				} else {
-					if (this.relatedIdsUI[this.currentId] != -1) {
-						this.listUI[this.relatedIdsUI[this.currentId]].close();
+					if (this.scenes[this.currentId].ui) {
+						this.scenes[this.currentId].ui.close();
 					} else {
 						// UIが存在しない場合は即時遷移完了とする
 						this.transitionHandler();
 					}
 				}
-				this.state = 1;
-			} else if (this.state == 2) {
+				// (即時遷移の場合,この時点でstateが変わっている)
+			}
+			if (this.state == 2) {
 				// 次のシーンをオープン
+				this.state = 3;
 				this.transCnt = 0;
-				this.listScene[this.nextId].open();
-				if ((this.relatedIdsBg[this.currentId] == this.relatedIdsBg[this.nextId]) &&
+				this.scenes[this.nextId].sc.open();
+
+				// Bgのオープン
+				if ((this.scenes[this.currentId].bg == this.scenes[this.nextId].bg) &&
 					(startFlg != true)) {
-					this.transCnt ++;
+					this.transitionHandler();
 				} else {
-					if (this.relatedIdsBg[this.nextId] != -1) {
-						this.listBg[this.relatedIdsBg[this.nextId]].open();
+					if (this.scenes[this.nextId].bg) {
+						this.scenes[this.nextId].bg.open();
 					} else {
 						// Bgが存在しない場合は即時遷移完了とする
 						this.transitionHandler();
 					}
 				}
-				if ((this.relatedIdsUI[this.currentId] == this.relatedIdsUI[this.nextId]) &&
+
+				// UIのオープン
+				if ((this.scenes[this.currentId].ui == this.scenes[this.nextId].ui) &&
 					(startFlg != true)) {
-					this.transCnt ++;
+					this.transitionHandler();
 				} else {
-					if (this.relatedIdsUI[this.nextId] != -1) {
-						this.listUI[this.relatedIdsUI[this.nextId]].open();
+					if (this.scenes[this.nextId].ui) {
+						this.scenes[this.nextId].ui.open();
 					} else {
 						// UIが存在しない場合は即時遷移完了とする
 						this.transitionHandler();
 					}
 				}
+
 				this.currentId = this.nextId;
-				this.state = 3;
+				// (即時遷移の場合,この時点でstateが変わっている)
 			}
 			return (0);
 		},
@@ -740,9 +920,15 @@ var kashiwa = {};
 			this.transCnt ++;
 			if (this.transCnt >= 3) {
 				if (this.state == 1) {
+				// クローズ完了に切り替え
 					this.state = 2;
 				} else if (this.state == 3) {
+				// 通常(遷移完了)に切り替え
 					this.state = 0;
+					// 全てのキューの遷移が終わったら再描画のループを完了してよい
+					if (this.queueList.length == 0) {
+						pkg.addEvent("stopSceneRedraw");
+					}
 				}
 			}
 		},
@@ -781,11 +967,436 @@ var kashiwa = {};
 	pkg.obj = {};
 
 	/*
+		---------- [Group]
+	*/
+
+	pkg.obj.Group = function() {
+		this.init();
+		this.type = "Group";
+		this.parent = null;
+	};
+	pkg.obj.Group.prototype = {
+
+		init:function() {
+		/* 初期化する */
+
+			this.hidden = false;
+			this.x = 0;
+			this.y = 0;
+			this.alpha = 1.0;
+
+			this.content = new Array();
+		},
+
+		append:function(obj) {
+		/* グループに追加する */
+
+			this.content.push(obj);
+			obj.parent = this;
+		},
+
+		remove:function(obj) {
+		/* グループから削除する */
+
+			for (var i = 0; i < this.content.length; i ++) {
+				if (this.content[i] == obj) {
+					this.content.splice(i, 1);
+				}
+			}
+		},
+
+		releasePress:function() {
+		/* ボタンの押しっぱなし判定を解放する */
+
+			if (this.hidden == true) {
+				return false;
+			}
+
+			for (var i = 0; i < this.content.length; i ++) {
+				// 子要素に同様の処理を実行する(ButtonFrameとGroupのみ)
+				if ((this.content[i].type == "ButtonFrame") || (this.content[i].type == "Group")) {
+					this.content[i].releasePress();
+				}
+			}
+		},
+
+		clearState:function() {
+		/* ボタンの状態を初期化する */
+
+			if (this.hidden == true) {
+				return false;
+			}
+
+			for (var i = 0; i < this.content.length; i ++) {
+				// 子要素に同様の処理を実行する(ButtonFrameとGroupのみ)
+				if ((this.content[i].type == "ButtonFrame") || (this.content[i].type == "Group")) {
+					this.content[i].clearState();
+				}
+			}
+		},
+
+		check:function() {
+		/* 入力状態を確認する */
+
+			if (this.hidden == true) {
+				return false;
+			}
+
+			for (var i = 0; i < this.content.length; i ++) {
+				// 子要素に同様の処理を実行する(ButtonFrameとGroupのみ)
+				if ((this.content[i].type == "ButtonFrame") || (this.content[i].type == "Group")) {
+					this.content[i].check();
+				}
+			}
+		}
+
+	};
+
+
+	/*
+		---------- [ButtonFrame]
+	*/
+
+	pkg.obj.ButtonFrame = function(target, anime) {
+		this.init(target, anime);
+		this.type = "ButtonFrame";
+		this.parent = null;
+	};
+	pkg.obj.ButtonFrame.prototype = {
+
+		init:function(target, anime) {
+		/* 初期化する
+		   - p1 : 判定対象とする描画オブジェクト
+		   - p2 : アニメーションのコマ数 */
+
+			this.hidden = false;
+			this.x = 0;
+			this.y = 0;
+			this.alpha = 1.0;
+
+			this.target = target;
+			this.animeMax = anime;
+			this.animeEasing = new pkg.Easing(this.animeMax, 50);
+
+			this.inputChk = null;
+
+			this.result = 0;
+
+			/* buttonHover :
+			   -  0 … ホバー無し
+			   -  1 … ホバー開始
+			   -  2 … ホバー終了 */
+			this.buttonHover = 0;
+			this.cntBtHover = 0;
+			this.lvBtHover = 0;
+
+			/* buttonState :
+			   -  0 … タッチ無し
+			   -  1 … タッチスタート
+			   -  2 … タッチエンド */
+			this.buttonState = 0;
+			this.cntBtState = 0;
+			this.lvBtState = 0;
+		},
+
+		getRectInfo:function() {
+		/* 対象オブジェクトの矩形位情報を取得する */
+
+			var posX = 0;
+			var posY = 0;
+			var width = 0;
+			var height = 0;
+
+			var rootObj = new Array();
+
+			// グループ階層を取得する
+			rootObj[0] = this.target;
+			for (var i = 0; rootObj[i].parent; i ++) {
+				rootObj[i + 1] = rootObj[i].parent;
+			}
+
+			// 階層を辿って座標を算出する
+			for (var i = rootObj.length - 1; i >= 0; i --) {
+				posX += rootObj[i].x;
+				posY += rootObj[i].y;
+			}
+
+			// 大きさを取得する
+			if (this.target.w) {
+				width = this.target.w;
+			}
+			if (this.target.h) {
+				height = this.target.h;
+			}
+
+			return ([posX, posY, width, height]);
+		},
+
+		update:function(f_rate) {
+		/* ボタンの状態を更新する */
+
+			// 更新処理
+			if (this.buttonHover == 1) {
+				if (this.cntBtHover < this.animeMax) {
+					this.cntBtHover += f_rate;
+					if (this.cntBtHover >= this.animeMax) {
+					// ホバーアニメの完了
+						this.cntBtHover = this.animeMax;
+
+						if ((this.buttonState == 0)
+							|| (this.buttonState == 1) && (this.cntBtState >= this.animeMax)
+							|| (this.buttonState == 2) && (this.cntBtState <= 0)) {
+						// アクティブのアニメが競合しない場合
+
+							// 完了イベントを飛ばす
+							pkg.addEvent("endButtonAnimation");
+						}
+					}
+				}
+			} else if (this.buttonHover == 2) {
+				if (this.cntBtHover > 0) {
+					this.cntBtHover -= f_rate;
+					if (this.cntBtHover < 0) {
+						this.cntBtHover = 0;
+					}
+				} else {
+				// ホバー終了アニメの完了
+					this.buttonHover = 0;
+
+					if ((this.buttonState == 0)
+						|| (this.buttonState == 1) && (this.cntBtState >= this.animeMax)
+						|| (this.buttonState == 2) && (this.cntBtState <= 0)) {
+					// アクティブのアニメが競合しない場合
+
+						// 完了イベントを飛ばす
+						pkg.addEvent("endButtonAnimation");
+					}
+				}
+			}
+			this.lvBtHover = this.animeEasing.getRate(this.cntBtHover);
+
+			if (this.buttonState == 1) {
+				if (this.cntBtState < this.animeMax) {
+					this.cntBtState += f_rate;
+					if (this.cntBtState >= this.animeMax) {
+					// アクティブアニメの完了
+						this.cntBtState = this.animeMax;
+						if ((this.buttonHover == 0)
+							|| (this.buttonHover == 1) && (this.cntBtHover >= this.animeMax)
+							|| (this.buttonHover == 2) && (this.cntBtHover <= 0)) {
+						// ホバーのアニメが競合しない場合
+
+							// 完了イベントを飛ばす
+							pkg.addEvent("endButtonAnimation");
+						}
+					}
+				}
+			} else if (this.buttonState == 2) {
+				if (this.cntBtState > 0) {
+					this.cntBtState -= f_rate;
+					if (this.cntBtState < 0) {
+						this.cntBtState = 0;
+					}
+				} else {
+				// アクティブ終了アニメの完了
+					this.buttonState = 0;
+					if ((this.buttonHover == 0)
+						|| (this.buttonHover == 1) && (this.cntBtHover >= this.animeMax)
+						|| (this.buttonHover == 2) && (this.cntBtHover <= 0)) {
+					// ホバーのアニメが競合しない場合
+
+						// 完了イベントを飛ばす
+						pkg.addEvent("endButtonAnimation");
+					}
+				}
+			}
+			this.lvBtState = this.animeEasing.getRate(this.cntBtState);
+		},
+
+		check:function() {
+		/* 入力状態を確認する */
+
+			this.inputChk.update();
+			var touchInfo = this.inputChk.getPointer();
+			var rect = this.getRectInfo();
+
+			// ボタン判定
+			if (this.inputChk.getTouchFlag() == true) {
+			// タッチ端末
+
+				// アクティブ判定・制御
+				if (this.buttonState != 1) {
+				// アクティブ中でない場合
+
+					if ((touchInfo.x >= rect[0]) && (touchInfo.x <= rect[0] + rect[2]) &&
+						(touchInfo.y >= rect[1]) && (touchInfo.y <= rect[1] + rect[3])) {
+						// アクティブ状態のスタート
+						this.buttonState = 1;
+						pkg.addEvent("startButtonAnimation");
+					}
+				} else if (this.buttonState == 1) {
+				// アクティブ中である場合
+
+					if (touchInfo.pressed == 0) {
+					// タッチが離された(= 確定)
+
+						// ボタンの確定
+						this.result = 1;
+
+						// アクティブ終了のスタート
+						this.buttonState = 2;
+						pkg.addEvent("startButtonAnimation");
+					} else if ((touchInfo.x < rect[0]) || (touchInfo.x > rect[0] + rect[2]) ||
+						(touchInfo.y < rect[1]) || (touchInfo.y > rect[1] + rect[3])) {
+					// タッチ位置がボタンから外れた(= タップのキャンセル)
+
+						// アクティブ終了のスタート
+						this.buttonState = 2;
+						pkg.addEvent("startButtonAnimation");
+					}
+				}
+			} else {
+			// マウス端末
+
+				// ホバー判定・制御
+				if (this.buttonHover != 1) {
+				// ホバー中でない場合
+
+					if ((touchInfo.x >= rect[0]) && (touchInfo.x <= rect[0] + rect[2]) &&
+						(touchInfo.y >= rect[1]) && (touchInfo.y <= rect[1] + rect[3])) {
+						// ホバー状態のスタート
+						this.buttonHover = 1;
+						pkg.addEvent("startButtonAnimation");
+					}
+				} else if (this.buttonHover == 1) {
+				// ホバー中である場合
+
+					if ((touchInfo.x < rect[0]) || (touchInfo.x > rect[0] + rect[2]) ||
+						(touchInfo.y < rect[1]) || (touchInfo.y > rect[1] + rect[3])) {
+						// ホバー終了のスタート
+						this.buttonHover = 2;
+						pkg.addEvent("startButtonAnimation");
+					}
+				}
+
+				// アクティブ判定・制御
+				if (this.buttonState != 1) {
+				// アクティブ中でない場合
+
+					if (touchInfo.pressed == 1) {
+					// マウスが押されている
+
+						if ((touchInfo.x >= rect[0]) && (touchInfo.x <= rect[0] + rect[2]) &&
+							(touchInfo.y >= rect[1]) && (touchInfo.y <= rect[1] + rect[3])) {
+							// アクティブ状態のスタート
+							this.buttonState = 1;
+							pkg.addEvent("startButtonAnimation");
+						}
+					}
+				} else if (this.buttonState == 1) {
+				// アクティブ中である場合
+
+					if (touchInfo.pressed == 0) {
+					// マウスが押されていない
+
+						if ((touchInfo.x >= rect[0]) && (touchInfo.x <= rect[0] + rect[2]) &&
+							(touchInfo.y >= rect[1]) && (touchInfo.y <= rect[1] + rect[3])) {
+						// マウスがボタンの上にある
+
+							// ボタンの確定
+							this.result = 1;
+
+							// アクティブ終了のスタート
+							this.buttonState = 2;
+							pkg.addEvent("startButtonAnimation");
+						} else {
+						// マウスがボタンの上にない
+
+							// アクティブ終了のスタート
+							this.buttonState = 2;
+							pkg.addEvent("startButtonAnimation");
+						}
+					}
+				}
+			}
+
+			return false;
+		},
+
+		getHover:function() {
+		/* ボタンのホバー状態を取得する */
+
+			var tmp = this.buttonHover;
+			return (tmp);
+		},
+
+		getHoverLevel:function() {
+		/* ボタンのホバー状態の進度を取得する */
+
+			var tmp = this.lvBtHover;
+			return (tmp);
+		},
+
+		getActive:function() {
+		/* ボタンのアクティブ状態を取得する */
+
+			var tmp = this.buttonState;
+			return (tmp);
+		},
+
+		getActiveLevel:function() {
+		/* ボタンのアクティブ状態の進度を取得する */
+
+			var tmp = this.lvBtState;
+			return (tmp);
+		},
+
+		getResult:function() {
+		/* 結果を取得する
+		   - return ( 状態コード )
+		     状態コード :
+		       -  0 … 未確定
+		       -  1 … ボタンが押された */
+
+			var tmp = 0;
+			if (this.result != 0) {
+				tmp = this.result;
+				this.result = 0;
+			}
+			return (tmp);
+		},
+
+		releasePress:function() {
+		/* ボタンの押しっぱなし判定を解放する */
+
+			this.buttonHover = 2;
+			this.buttonState = 2;
+			this.result = 0;
+			pkg.addEvent("startButtonAnimation");
+		},
+
+		clearState:function() {
+		/* ボタンの状態を初期化する */
+
+			this.buttonHover = 2;
+			this.buttonState = 2;
+			this.cntBtHover = 0;
+			this.cntBtState = 0;
+			this.result = 0;
+			pkg.addEvent("startButtonAnimation");
+		}
+
+	};
+
+
+	/*
 		---------- [Text]
 	*/
 
 	pkg.obj.Text = function() {
 		this.init();
+		this.type = "Text";
+		this.parent = null;
 	};
 	pkg.obj.Text.prototype = {
 
@@ -809,6 +1420,12 @@ var kashiwa = {};
 			this.size = 12;
 			this.align = 'left';
 			this.baseline = 'top';
+		},
+
+		check:function() {
+		/* 入力状態を確認する */
+
+			return false;
 		}
 
 	};
@@ -820,6 +1437,8 @@ var kashiwa = {};
 
 	pkg.obj.FillRect = function() {
 		this.init();
+		this.type = "FillRect";
+		this.parent = null;
 	};
 	pkg.obj.FillRect.prototype = {
 
@@ -837,6 +1456,12 @@ var kashiwa = {};
 			this.fill.r = 0;
 			this.fill.g = 0;
 			this.fill.b = 0;
+		},
+
+		check:function() {
+		/* 入力状態を確認する */
+
+			return false;
 		}
 
 	};
@@ -848,6 +1473,8 @@ var kashiwa = {};
 
 	pkg.obj.StrokeRect = function() {
 		this.init();
+		this.type = "StrokeRect";
+		this.parent = null;
 	};
 	pkg.obj.StrokeRect.prototype = {
 
@@ -868,6 +1495,12 @@ var kashiwa = {};
 
 			this.lineCap = 'round';
 			this.lineWidth = 1;
+		},
+
+		check:function() {
+		/* 入力状態を確認する */
+
+			return false;
 		}
 
 	};
@@ -879,6 +1512,8 @@ var kashiwa = {};
 
 	pkg.obj.FillCircle = function() {
 		this.init();
+		this.type = "FillCircle";
+		this.parent = null;
 	};
 	pkg.obj.FillCircle.prototype = {
 
@@ -895,6 +1530,12 @@ var kashiwa = {};
 			this.fill.r = 0;
 			this.fill.g = 0;
 			this.fill.b = 0;
+		},
+
+		check:function() {
+		/* 入力状態を確認する */
+
+			return false;
 		}
 
 	};
@@ -906,6 +1547,8 @@ var kashiwa = {};
 
 	pkg.obj.StrokeCircle = function() {
 		this.init();
+		this.type = "StrokeCircle";
+		this.parent = null;
 	};
 	pkg.obj.StrokeCircle.prototype = {
 
@@ -924,6 +1567,12 @@ var kashiwa = {};
 			this.stroke.b = 0;
 
 			this.lineWidth = 1;
+		},
+
+		check:function() {
+		/* 入力状態を確認する */
+
+			return false;
 		}
 
 	};
@@ -935,6 +1584,8 @@ var kashiwa = {};
 
 	pkg.obj.FillRoundRect = function() {
 		this.init();
+		this.type = "FillRoundRect";
+		this.parent = null;
 	};
 	pkg.obj.FillRoundRect.prototype = {
 
@@ -953,6 +1604,12 @@ var kashiwa = {};
 			this.fill.r = 0;
 			this.fill.g = 0;
 			this.fill.b = 0;
+		},
+
+		check:function() {
+		/* 入力状態を確認する */
+
+			return false;
 		}
 
 	};
@@ -964,6 +1621,8 @@ var kashiwa = {};
 
 	pkg.obj.StrokeRoundRect = function() {
 		this.init();
+		this.type = "StrokeRoundRect";
+		this.parent = null;
 	};
 	pkg.obj.StrokeRoundRect.prototype = {
 
@@ -984,6 +1643,44 @@ var kashiwa = {};
 			this.stroke.b = 0;
 
 			this.lineWidth = 1;
+		},
+
+		check:function() {
+		/* 入力状態を確認する */
+
+			return false;
+		}
+
+	};
+
+
+	/*
+		---------- [DrawSVG]
+	*/
+
+	pkg.obj.DrawSVG = function() {
+		this.init();
+		this.type = "DrawSVG";
+		this.parent = null;
+	};
+	pkg.obj.DrawSVG.prototype = {
+
+		init:function() {
+		/* 初期化する */
+
+			this.hidden = false;
+			this.x = 0;
+			this.y = 0;
+			this.w = null;
+			this.h = null;
+
+			this.alpha = 1.0;
+		},
+
+		check:function() {
+		/* 入力状態を確認する */
+
+			return false;
 		}
 
 	};
@@ -995,6 +1692,8 @@ var kashiwa = {};
 
 	pkg.obj.DrawImage = function() {
 		this.init();
+		this.type = "DrawImage";
+		this.parent = null;
 	};
 	pkg.obj.DrawImage.prototype = {
 
@@ -1008,6 +1707,12 @@ var kashiwa = {};
 			this.h = 0;
 
 			this.alpha = 1.0;
+		},
+
+		check:function() {
+		/* 入力状態を確認する */
+
+			return false;
 		}
 
 	};
@@ -1019,6 +1724,8 @@ var kashiwa = {};
 
 	pkg.obj.Spinner = function() {
 		this.init();
+		this.type = "Spinner";
+		this.parent = null;
 	};
 	pkg.obj.Spinner.prototype = {
 
@@ -1029,6 +1736,8 @@ var kashiwa = {};
 			this.x = 0;
 			this.y = 0;
 			this.r = 0;
+
+			this.alpha = 1.0;
 
 			this.fill = {};
 			this.fill.r = 0;
@@ -1052,6 +1761,12 @@ var kashiwa = {};
 					this.amountCnt ++;
 				}
 			}
+		},
+
+		check:function() {
+		/* 入力状態を確認する */
+
+			return false;
 		}
 
 	};
@@ -1066,6 +1781,98 @@ var kashiwa = {};
 	pkg.web.pxr = 1;
 
 	/*
+		---------- [Group]
+	*/
+
+	pkg.web.Group = function() {
+		pkg.obj.Group.apply(this, arguments);
+	};
+	pkg.inheritPrototype(pkg.web.Group, pkg.obj.Group);
+	pkg.addHash(pkg.web.Group.prototype, {
+
+		startChecker:function() {
+		/* 入力チェックを開始する */
+
+			for (var i = 0; i < this.content.length; i ++) {
+				if ((this.content[i].type == "ButtonFrame") || (this.content[i].type == "Group")) {
+					this.content[i].startChecker();
+				}
+			}
+		},
+
+		stopChecker:function() {
+		/* 入力チェックを停止する */
+
+			for (var i = 0; i < this.content.length; i ++) {
+				if ((this.content[i].type == "ButtonFrame") || (this.content[i].type == "Group")) {
+					this.content[i].stopChecker();
+				}
+			}
+		},
+
+		draw:function(canv) {
+		/* 描画する
+		   - p1 : 対象のCanvasControllerオブジェクト */
+
+			if (this.hidden == true) {
+				return false;
+			}
+
+			for (var i = 0; i < this.content.length; i ++) {
+				// 位置と透明度を継承する
+				var tmpObj = Object.create(this.content[i]);
+				tmpObj.x = this.x + this.content[i].x;
+				tmpObj.y = this.y + this.content[i].y;
+				tmpObj.alpha = this.alpha * this.content[i].alpha;
+
+				tmpObj.draw(canv);
+			}
+		}
+
+	});
+
+
+	/*
+		---------- [ButtonFrame]
+	*/
+
+	pkg.web.ButtonFrame = function() {
+		pkg.obj.ButtonFrame.apply(this, arguments);
+	};
+	pkg.inheritPrototype(pkg.web.ButtonFrame, pkg.obj.ButtonFrame);
+	pkg.addHash(pkg.web.ButtonFrame.prototype, {
+
+		initChecker:function(canv) {
+		/* InputCheckerを初期化する
+		   - p1 : 対象のCanvasControllerオブジェクト */
+
+			this.inputChk = new pkg.web.InputChecker(this.touchFlg, true);
+			this.inputChk.config(canv);
+		},
+
+		startChecker:function() {
+		/* 入力チェックを開始する */
+
+			this.inputChk.start();
+		},
+
+		stopChecker:function() {
+		/* 入力チェックを停止する */
+
+			this.inputChk.stop();
+		},
+
+		draw:function(canv) {
+		/* 描画する
+		   - p1 : 対象のCanvasControllerオブジェクト */
+
+			return false;
+		}
+
+	});
+
+
+	/*
 		---------- [Text]
 	*/
 
@@ -1075,13 +1882,18 @@ var kashiwa = {};
 	pkg.inheritPrototype(pkg.web.Text, pkg.obj.Text);
 	pkg.addHash(pkg.web.Text.prototype, {
 
-		draw:function(ctx) {
+		draw:function(canv) {
 		/* 描画する
-		   - p1 : 対象canvasのコンテキスト */
+		   - p1 : 対象のCanvasControllerオブジェクト */
 
 			if (this.hidden == true) {
 				return false;
 			}
+
+			canv.adjustRotation();
+
+			var ctx = canv.getInfo().ctx;
+
 			ctx.globalAlpha = this.alpha;
 			var tmpFont = this.size * pkg.web.pxr;
 			ctx.font = '' + this.weight + ' ' + tmpFont + 'px ' + this.font;
@@ -1089,15 +1901,21 @@ var kashiwa = {};
 			ctx.textAlign = this.align;
 			ctx.textBaseline = this.baseline;
 			ctx.fillText(this.body, this.x * pkg.web.pxr, this.y * pkg.web.pxr);
+
+			ctx.setTransform(1, 0, 0, 1, 0, 0);
+			ctx.rotate(0);
 		},
 
 		measure:function(ctx) {
 		/* 横幅を計測する
-		   - p1 : 対象canvasのコンテキスト */
+		   - p1 : 対象のCanvasControllerオブジェクト */
 
 			if (this.hidden == true) {
 				return false;
 			}
+
+			var ctx = canv.getInfo().ctx;
+
 			ctx.globalAlpha = this.alpha;
 			var tmpFont = this.size * pkg.web.pxr;
 			ctx.font = '' + this.weight + ' ' + tmpFont + 'px ' + this.font;
@@ -1121,16 +1939,24 @@ var kashiwa = {};
 	pkg.inheritPrototype(pkg.web.FillRect, pkg.obj.FillRect);
 	pkg.addHash(pkg.web.FillRect.prototype, {
 
-		draw:function(ctx) {
+		draw:function(canv) {
 		/* 描画する
-		   - p1 : 対象canvasのコンテキスト */
+		   - p1 : 対象のCanvasControllerオブジェクト */
 
 			if (this.hidden == true) {
 				return false;
 			}
+
+			canv.adjustRotation();
+
+			var ctx = canv.getInfo().ctx;
+
 			ctx.globalAlpha = this.alpha;
 			ctx.fillStyle = 'rgb(' + this.fill.r + ', ' + this.fill.g + ', ' + this.fill.b + ')';
 			ctx.fillRect(this.x * pkg.web.pxr, this.y * pkg.web.pxr, this.w * pkg.web.pxr, this.h * pkg.web.pxr);
+
+			ctx.setTransform(1, 0, 0, 1, 0, 0);
+			ctx.rotate(0);
 		}
 
 	});
@@ -1146,18 +1972,26 @@ var kashiwa = {};
 	pkg.inheritPrototype(pkg.web.StrokeRect, pkg.obj.StrokeRect);
 	pkg.addHash(pkg.web.StrokeRect.prototype, {
 
-		draw:function(ctx) {
+		draw:function(canv) {
 		/* 描画する
-		   - p1 : 対象canvasのコンテキスト */
+		   - p1 : 対象のCanvasControllerオブジェクト */
 
 			if (this.hidden == true) {
 				return false;
 			}
+
+			canv.adjustRotation();
+
+			var ctx = canv.getInfo().ctx;
+
 			ctx.globalAlpha = this.alpha;
 			ctx.strokeStyle = 'rgb(' + this.stroke.r + ', ' + this.stroke.g + ', ' + this.stroke.b + ')';
 			ctx.lineCap = this.lineCap;
 			ctx.lineWidth = this.lineWidth * pkg.web.pxr;
 			ctx.strokeRect(this.x * pkg.web.pxr, this.y * pkg.web.pxr, this.w * pkg.web.pxr, this.h * pkg.web.pxr);
+
+			ctx.setTransform(1, 0, 0, 1, 0, 0);
+			ctx.rotate(0);
 		}
 
 	});
@@ -1173,18 +2007,26 @@ var kashiwa = {};
 	pkg.inheritPrototype(pkg.web.FillCircle, pkg.obj.FillCircle);
 	pkg.addHash(pkg.web.FillCircle.prototype, {
 
-		draw:function(ctx) {
+		draw:function(canv) {
 		/* 描画する
-		   - p1 : 対象canvasのコンテキスト */
+		   - p1 : 対象のCanvasControllerオブジェクト */
 
 			if (this.hidden == true) {
 				return false;
 			}
+
+			canv.adjustRotation();
+
+			var ctx = canv.getInfo().ctx;
+
 			ctx.globalAlpha = this.alpha;
 			ctx.fillStyle = 'rgb(' + this.fill.r + ', ' + this.fill.g + ', ' + this.fill.b + ')';
 			ctx.beginPath();
 			ctx.arc(this.x * pkg.web.pxr, this.y * pkg.web.pxr, this.r * pkg.web.pxr, 0, Math.PI * 2.0, true);
 			ctx.fill();
+
+			ctx.setTransform(1, 0, 0, 1, 0, 0);
+			ctx.rotate(0);
 		}
 
 	});
@@ -1200,13 +2042,18 @@ var kashiwa = {};
 	pkg.inheritPrototype(pkg.web.StrokeCircle, pkg.obj.StrokeCircle);
 	pkg.addHash(pkg.web.StrokeCircle.prototype, {
 
-		draw:function(ctx) {
+		draw:function(canv) {
 		/* 描画する
-		   - p1 : 対象canvasのコンテキスト */
+		   - p1 : 対象のCanvasControllerオブジェクト */
 
 			if (this.hidden == true) {
 				return false;
 			}
+
+			canv.adjustRotation();
+
+			var ctx = canv.getInfo().ctx;
+
 			ctx.globalAlpha = this.alpha;
 			ctx.strokeStyle = 'rgb(' + this.stroke.r + ', ' + this.stroke.g + ', ' + this.stroke.b + ')';
 			ctx.lineCap = this.lineCap;
@@ -1214,6 +2061,9 @@ var kashiwa = {};
 			ctx.beginPath();
 			ctx.arc(this.x * pkg.web.pxr, this.y * pkg.web.pxr, this.r * pkg.web.pxr, 0, Math.PI * 2.0, true);
 			ctx.stroke();
+
+			ctx.setTransform(1, 0, 0, 1, 0, 0);
+			ctx.rotate(0);
 		}
 
 	});
@@ -1229,13 +2079,18 @@ var kashiwa = {};
 	pkg.inheritPrototype(pkg.web.FillRoundRect, pkg.obj.FillRoundRect);
 	pkg.addHash(pkg.web.FillRoundRect.prototype, {
 
-		draw:function(ctx) {
+		draw:function(canv) {
 		/* 描画する
-		   - p1 : 対象canvasのコンテキスト */
+		   - p1 : 対象のCanvasControllerオブジェクト */
 
 			if (this.hidden == true) {
 				return false;
 			}
+
+			canv.adjustRotation();
+
+			var ctx = canv.getInfo().ctx;
+
 			ctx.globalAlpha = this.alpha;
 			ctx.fillStyle = 'rgb(' + this.fill.r + ', ' + this.fill.g + ', ' + this.fill.b + ')';
 			ctx.beginPath();
@@ -1248,6 +2103,9 @@ var kashiwa = {};
 			ctx.arc((this.x + this.r) * pkg.web.pxr, (this.y + this.h - this.r) * pkg.web.pxr,
 				this.r * pkg.web.pxr, 0.5 * Math.PI, Math.PI, false);
 			ctx.fill();
+
+			ctx.setTransform(1, 0, 0, 1, 0, 0);
+			ctx.rotate(0);
 		}
 
 	});
@@ -1263,13 +2121,18 @@ var kashiwa = {};
 	pkg.inheritPrototype(pkg.web.StrokeRoundRect, pkg.obj.StrokeRoundRect);
 	pkg.addHash(pkg.web.StrokeRoundRect.prototype, {
 
-		draw:function(ctx) {
+		draw:function(canv) {
 		/* 描画する
-		   - p1 : 対象canvasのコンテキスト */
+		   - p1 : 対象のCanvasControllerオブジェクト */
 
 			if (this.hidden == true) {
 				return false;
 			}
+
+			canv.adjustRotation();
+
+			var ctx = canv.getInfo().ctx;
+
 			ctx.globalAlpha = this.alpha;
 			ctx.strokeStyle = 'rgb(' + this.stroke.r + ', ' + this.stroke.g + ', ' + this.stroke.b + ')';
 			ctx.lineWidth = this.lineWidth * pkg.web.pxr;
@@ -1285,6 +2148,60 @@ var kashiwa = {};
 			ctx.moveTo(this.x * pkg.web.pxr, (this.y + this.h - this.r) * pkg.web.pxr);
 			ctx.lineTo(this.x * pkg.web.pxr, (this.y + this.r) * pkg.web.pxr);
 			ctx.stroke();
+
+			ctx.setTransform(1, 0, 0, 1, 0, 0);
+			ctx.rotate(0);
+		}
+
+	});
+
+
+	/*
+		---------- [DrawSVG]
+	*/
+
+	pkg.web.DrawSVG = function() {
+		pkg.obj.DrawSVG.apply(this, arguments);
+
+		this.imgData = null;
+	};
+	pkg.inheritPrototype(pkg.web.DrawSVG, pkg.obj.DrawSVG);
+	pkg.addHash(pkg.web.DrawSVG.prototype, {
+
+		config:function(img) {
+		/* SVGデータを設定する
+		   - p1 : Imageオブジェクト化されたSVGデータ */
+
+			this.imgData = img;
+		},
+
+		draw:function(canv) {
+		/* 描画する
+		   - p1 : 対象のCanvasControllerオブジェクト */
+
+			if (this.hidden == true) {
+				return false;
+			}
+			if (! this.imgData) {
+				return false;
+			}
+
+			canv.adjustRotation();
+
+			var ctx = canv.getInfo().ctx;
+
+			ctx.globalAlpha = this.alpha;
+			var w = this.w;
+			if (! w) { w =  this.imgData.width; }
+			var h = this.h;
+			if (! h) { h =  this.imgData.height; }
+
+			ctx.drawImage(this.imgData,
+				0, 0, this.imgData.width, this.imgData.height,
+				this.x * pkg.web.pxr, this.y * pkg.web.pxr, w * pkg.web.pxr, h * pkg.web.pxr);
+
+			ctx.setTransform(1, 0, 0, 1, 0, 0);
+			ctx.rotate(0);
 		}
 
 	});
@@ -1307,24 +2224,37 @@ var kashiwa = {};
 	pkg.inheritPrototype(pkg.web.DrawImage, pkg.obj.DrawImage);
 	pkg.addHash(pkg.web.DrawImage.prototype, {
 
-		config:function(canv, opt, pxr_opt) {
+		config:function(canv, x, y, w, h, opt, pxr_opt) {
 		/* 画像のコピー元を設定する
 		   - p1 : コピー元のcanvas要素
-		   - p2 : 等倍コピーオプション(=1 : 有効)
-		   - p3 : コピー元のピクセル密度を考慮する(=1 : 有効) */
+		   - p2 : コピー元のX座標
+		   - p3 : コピー元のY座標
+		   - p4 : コピー元の幅(p6=1なら省略可)
+		   - p5 : コピー元の高さ(p6=1なら省略可)
+		   - p6 : 等倍コピーオプション(=1 : 有効)
+		   - p7 : コピー元のピクセル密度を考慮する(=1 : 有効) */
 
 			this.srcCanv = canv;
+			this.srcX = x;
+			this.srcY = y;
+			this.srcW = w;
+			this.srcH = h;
 			this.scaleOpt = opt;
 			this.pxrOpt = pxr_opt;
 		},
 
-		draw:function(ctx) {
+		draw:function(canv) {
 		/* 描画する
-		   - p1 : 対象canvasのコンテキスト */
+		   - p1 : 対象のCanvasControllerオブジェクト */
 
 			if (this.hidden == true) {
 				return false;
 			}
+
+			canv.adjustRotation();
+
+			var ctx = canv.getInfo().ctx;
+
 			var optRate;
 			if (this.pxrOpt == 1) {
 				optRate = pkg.web.pxr;
@@ -1341,6 +2271,9 @@ var kashiwa = {};
 					this.srcX * optRate, this.srcY * optRate, this.srcW * optRate, this.srcH * optRate,
 					this.x * pkg.web.pxr, this.y * pkg.web.pxr, this.w * pkg.web.pxr, this.h * pkg.web.pxr);				
 			}
+
+			ctx.setTransform(1, 0, 0, 1, 0, 0);
+			ctx.rotate(0);
 		}
 
 	});
@@ -1358,13 +2291,18 @@ var kashiwa = {};
 	pkg.inheritPrototype(pkg.web.Spinner, pkg.obj.Spinner);
 	pkg.addHash(pkg.web.Spinner.prototype, {
 
-		draw:function(ctx) {
+		draw:function(canv) {
 		/* 描画する
-		   - p1 : 対象canvasのコンテキスト */
+		   - p1 : 対象のCanvasControllerオブジェクト */
 
 			if (this.hidden == true) {
 				return false;
 			}
+
+			canv.adjustRotation();
+
+			var ctx = canv.getInfo().ctx;
+
 			this.pieceW = Math.round(this.r * 0.1);
 			this.pieceH = Math.round(this.r * 0.25);
 			this.radius = this.r / 2;
@@ -1384,7 +2322,7 @@ var kashiwa = {};
 
 			for (var i = 0; i < 12; i ++) {
 				ctx.fillStyle = 'rgb(' + this.fill.r + ', ' + this.fill.g + ', ' + this.fill.b + ')';
-				ctx.globalAlpha = 1 / 12 * i;
+				ctx.globalAlpha = 1 / 12 * i * this.alpha;
 				ctx.beginPath();
 				ctx.moveTo((0 - this.pieceW / 4) * pkg.web.pxr,
 					(this.radius - this.pieceH) * pkg.web.pxr);
@@ -1402,6 +2340,9 @@ var kashiwa = {};
 			ctx.rotate(-30 * this.rotateCnt * Math.PI / 180);
 			ctx.translate(-this.x / 2 * pkg.web.pxr, -this.y / 2 * pkg.web.pxr);
 			ctx.restore();
+
+			ctx.setTransform(1, 0, 0, 1, 0, 0);
+			ctx.rotate(0);
 		}
 
 	});
@@ -1579,81 +2520,45 @@ var kashiwa = {};
 			this.pixelH = this.viewAreaH * this.devicePxr;
 		},
 
-		getOS:function() {
-		/* OS情報を取得する
-		   - return ( OSコード )
-		     OSコード :
-		       - -1 … 未取得
-		       -  0 … 下記以外(PCなど)
-		       -  1 … iOS
-		       -  2 … Android
-		       -  3 … Windows Phone */
+		getInfo:function() {
+		/* デバイス情報を取得する
+		   - return ( {
+		        deviceW: デバイスの画面解像度(Width),
+		        deviceH: デバイスの画面解像度(Height),
+		        viewAreaW: ブラウザの表示領域(Width),
+		        viewAreaH: ブラウザの表示領域(Height),
+		        pixelW: ブラウザの表示領域のピクセル原寸(Width),
+		        pixelH: ブラウザの表示領域のピクセル原寸(Height),
+		        devicePxr: デバイスのピクセル密度,
+		        browser: ブラウザの種類,
+				   - -1 … 未取得
+				   -  0 … WebKit
+				   -  1 … Internet Explorer
+				   -  2 … Opera
+				   -  3 … Firefox
+				   -  4 … Chrome(Android)
+		        deviceOS: OSの種類,
+				   - -1 … 未取得
+				   -  0 … 下記以外(PCなど)
+				   -  1 … iOS
+				   -  2 … Android
+				   -  3 … Windows Phone
+		        tablet: タブレットか否か
+				   - true … タブレット端末
+			 } ) */
 
-			if (this.debug) { return (0); }
-			var tmp = this.deviceOS;
-			return (tmp);
-		},
+			var tmp = {};
+			tmp.deviceW = this.deviceW;
+			tmp.deviceH = this.deviceH;
+			tmp.viewAreaW = this.viewAreaW;
+			tmp.viewAreaH = this.viewAreaH;
+			tmp.pixelW = this.pixelW;
+			tmp.pixelH = this.pixelH;
+			tmp.devicePxr = this.devicePxr;
+			tmp.browser = this.browser;
+			tmp.deviceOS = this.deviceOS;
+			tmp.tablet = this.tablet;
 
-		getTablet:function() {
-		/* タブレットか否かを取得する
-		   - return ( 判別コード )
-		     判別コード :
-		       - true … タブレット端末 */
-
-			var tmp = this.tablet;
-			return (tmp);
-		},
-
-		getBrowser:function() {
-		/* ブラウザ情報を取得する
-		   - return ( ブラウザコード )
-		     ブラウザコード :
-		       - -1 … 未取得
-		       -  0 … WebKit
-		       -  1 … Internet Explorer
-		       -  2 … Opera
-		       -  3 … Firefox
-		       -  4 … Chrome(Android) */
-
-			var tmp = this.browser;
-			return (tmp);
-		},
-
-		getScale:function(type) {
-		/* 画面解像度を取得する
-		   - p1 : 取得する情報タイプ
-		     情報タイプ :
-		       - 0 … deviceW
-		       - 1 … deviceH
-		       - 2 … viewAreaW
-		       - 3 … viewAreaH
-		       - 4 … pixelW
-		       - 5 … pixelH
-		       - 6 … devicePxr */
-
-			var tmp;
-			if (type == 0) {
-				tmp = this.deviceW;
-				if (this.debug) { tmp = 320; }
-			} else if (type == 1) {
-				tmp = this.deviceH;
-				if (this.debug) { tmp = 480; }
-			} else if (type == 2) {
-				tmp = this.viewAreaW;
-				if (this.debug) { tmp = 320; }
-			} else if (type == 3) {
-				tmp = this.viewAreaH;
-				if (this.debug) { tmp = 416; }
-			} else if (type == 4) {
-				tmp = this.pixelW;
-				if (this.debug) { tmp = 640; }
-			} else if (type == 5) {
-				tmp = this.pixelH;
-				if (this.debug) { tmp = 832; }
-			} else if (type == 6) {
-				tmp = this.devicePxr;
-				if (this.debug) { tmp = 2; }
-			}
 			return (tmp);
 		}
 
@@ -1664,40 +2569,234 @@ var kashiwa = {};
 		---------- [WindowController]
 	*/
 
-	pkg.WindowController = function() {
+	pkg.web.WindowController = function() {
 	};
-	pkg.WindowController.prototype = {
+	pkg.web.WindowController.prototype = {
+
+		init:function() {
+		/* 初期化する */
+
+			var _this = this;
+			window.addEventListener("resize", function() {
+				_this.resizeHandler();
+			}, false);
+			this.funcOnResized = function() {};
+		},
+
+		regResizeFunc:function(func) {
+		/* リサイズ時に実行する関数を登録する */
+
+			this.funcOnResized = func;
+		},
 
 		resizeHandler:function() {
 		/* リサイズ時の処理 */
 
-			return false;
+			this.funcOnResized();
+		}
+
+	};
+
+
+	/*
+		---------- [CanvasController]
+	*/
+
+	pkg.web.CanvasController = function(canv) {
+		this.init(canv);
+	};
+	pkg.web.CanvasController.prototype = {
+
+		init:function(canv) {
+		/* 初期化する
+		   - p1 : 対象のcanvasオブジェクト */
+
+			this.canv = canv;
+			this.ctx = this.canv.getContext('2d');
+			this.x = 0;
+			this.y = 0;
+			this.pxr = 1; // pixW ÷ nativeW
+			this.viewRate = 1; // width ÷ nativeW
+			this.orientation = 0; // 0 or 90
+			this.display = true;
+
+			// 表示スタイル上のサイズ(縮小される可能性あり)
+			this.width = this.canv.width;
+			this.height = this.canv.height;
+
+			// プログラム上の計算サイズ
+			this.nativeW = this.width;
+			this.nativeH = this.height;
+
+			// canvasの描画サイズ(ピクセル原寸)
+			this.pixW = this.nativeW * this.pxr;
+			this.pixH = this.nativeH * this.pxr;
 		},
 
-		getResized:function(dInfo) {
-		/* リサイズの取得 */
+		changeSize:function(w, h, pxr, screenW, screenH, orientation) {
+		/* canvasのサイズを変更する */
 
-			var curObj = this;
-			if ((dInfo.getOS() == 1) || ((dInfo.getOS() == 2) && (dInfo.getBrowser() == 4))) {
-				// iOS, Android(Chrome)
-				window.addEventListener("orientationchange", function() {
-					curObj.resizeHandler();
-				}, false);
+			var width = this.nativeW;
+			var height = this.nativeH;
+			if (w) {
+				width = w;
 			}
-			if ((dInfo.getOS() == 0) || (dInfo.getOS() == 2) || (dInfo.getOS() == 3)) {
-				window.addEventListener("resize", function() {
-					if ((dInfo.getOS() == 0) || (dInfo.getOS() == 3)) {
-						// PC, WindowsPhone
-						curObj.resizeHandler();
-					} else if ((dInfo.getOS() == 2) && ((dInfo.getBrowser() == 0) || (dInfo.getBrowser() == 2))) {
-						// Android(標準ブラウザ), Android(Opera)
-						var tmpW = Math.floor(window.outerWidth / window.devicePixelRatio);
-						if (tmpW != dInfo.getScale(0)) {
-							curObj.resizeHandler();
-						}
-					}
-				}, false);
+			if (h) {
+				height = h;
 			}
+
+			// スクリーンに収まるサイズを算出する
+			var calcW = null, calcH = null, calcRate = null;
+			if ((screenW) || (screenH)) {
+				// スクリーン幅に合わせた場合のサイズを算出
+				var output1_W, output1_H;
+				if (width > screenW) {
+				// 幅が収まらない場合は,縮小して代入する
+					output1_W = Math.floor(screenW);
+					output1_H = Math.floor(height * screenW / width);
+				} else {
+				// 幅が収まる場合は,そのまま代入する
+					output1_W = width;
+					output1_H = height;
+				}
+
+				// スクリーン高に合わせた場合のサイズを算出
+				var output2_W, output2_H;
+				if (height > screenH) {
+				// 高さが収まらない場合は,縮小して代入する
+					output2_W = Math.floor(width * screenH / height);
+					output2_H = Math.floor(screenH);
+				} else {
+				// 幅が収まる場合は,そのまま代入する
+					output2_W = width;
+					output2_H = height;
+				}
+
+				if (output1_W <= output2_W) {
+					calcW = output1_W;
+					calcH = output1_H;
+					calcRate = output1_W /width;
+				} else {
+					calcW = output2_W;
+					calcH = output2_H;
+					calcRate = output2_W / width;
+				}
+			}
+
+			// ピクセル密度を決定する
+			if (pxr) {
+				this.pxr = pxr;
+			}
+
+			// 画面回転を決定する
+			if ((orientation == 0) || (orientation == 90)) {
+				this.orientation = orientation;
+			}
+
+			// canvasの幅を決定する
+			if ((w) || (pxr) || (calcW) || (orientation == 0) || (orientation == 90)) {
+				this.nativeW = width;
+				this.pixW = width * pxr;
+				if (calcW) {
+					this.width = calcW;
+				} else {
+					this.width = this.nativeW;
+				}
+				if (this.orientation == 90) {
+					this.canv.style.height = this.width + 'px';
+					this.canv.height = this.pixW;
+				} else {
+					this.canv.style.width = this.width + 'px';
+					this.canv.width = this.pixW;
+				}
+			}
+
+			// canvasの高さを決定する
+			if ((h) || (pxr) || (calcH) || (orientation == 0) || (orientation == 90)) {
+				this.nativeH = height;
+				this.pixH = height * pxr;
+				if (calcH) {
+					this.height = calcH;
+				} else {
+					this.height = this.nativeH;
+				}
+				if (this.orientation == 90) {
+					this.canv.style.width = this.height + 'px';
+					this.canv.width = this.pixH;
+				} else {
+					this.canv.style.height = this.height + 'px';
+					this.canv.height = this.pixH;
+				}
+			}
+
+			// canvasの表示倍率を決定する
+			if (calcRate) {
+				this.viewRate = calcRate;
+			} else {
+				this.viewRate = 1;
+			}
+		},
+
+		changePosition:function(x, y) {
+		/* canvasの位置を変更する */
+
+			if (x) {
+				this.x = x;
+				this.canv.style.marginLeft = this.x + 'px';
+			}
+			if (y) {
+				this.y = y;
+				this.canv.style.marginTop = this.y + 'px';
+			}
+		},
+
+		changeVisibility:function(flag) {
+		/* 表示・非表示を変更する */
+
+			this.display = flag;
+			if (this.display == false) {
+				this.canv.style.display = 'none';
+			}
+			if (this.display == true) {
+				this.canv.style.display = 'block';
+			}
+		},
+
+		adjustRotation:function() {
+		/* 必要に応じてcanvasの描画位置を調整する */
+
+			if (this.orientation == 90) {
+				this.ctx.translate(this.pixH, 0);
+				this.ctx.rotate(Math.PI / 2);
+			}
+		},
+
+		getInfo:function() {
+		/* canvasの情報を取得する */
+
+			var obj = {};
+			obj.x = this.x;
+			obj.y = this.y;
+			obj.width = this.width;
+			obj.height = this.height;
+			obj.nativeW = this.nativeW;
+			obj.nativeH = this.nativeH;
+			obj.pixW = this.pixW;
+			obj.pixH = this.pixH;
+			obj.pxr = this.pxr;
+			obj.viewRate = this.viewRate;
+			obj.orientation = this.orientation;
+			obj.display = this.display;
+			obj.ctx = this.ctx;
+			obj.canv = this.canv;
+
+			return (obj);
+		},
+
+		clearAll:function() {
+		/* 描画内容をすべて消去する */
+
+			this.ctx.clearRect(0, 0, this.canv.width, this.canv.height);
 		}
 
 	};
@@ -1712,18 +2811,16 @@ var kashiwa = {};
 		---------- [InputChecker]
 	*/
 
-	pkg.InputChecker = function(touch, queflg) {
-	/* - p1 : タッチデバイスフラグ(=true : タッチ有効化)
-	   - p2 : キュー利用フラグ(=true : キュー有効化) */
+	pkg.InputChecker = function(queflg) {
+	/* - p1 : キュー利用フラグ(=true : キュー有効化) */
 
-		this.touchFlg = touch;
 		this.enableQueue = queflg;
 
-		this.currentKeyInfo = new Array();
-		this.queueList = new Array();
+		this.currentKeyInfo = {};
 		this.firstDownFlg = false;
 		this.keepDownFlg = false;
 
+		this.touchFlg = false;
 		this.preventive = false;
 
 		this.init();
@@ -1733,49 +2830,70 @@ var kashiwa = {};
 		init:function() {
 		/* チェッカーを初期化する */
 
-			this.currentKeyInfo = [0, -1, -1];
-			this.queueList = [];
+			this.currentKeyInfo.pressed = 0;
+			this.currentKeyInfo.x = -1;
+			this.currentKeyInfo.y = -1;
+			this.queueList = new Array();
 			this.firstDownFlg = false;
 			this.keepDownFlg = false;
 		},
 
-		keyHandler:function(vals) {
+		keyHandler:function(x, y, on, down) {
 		/* 入力キーをキューに追加する */
 
-			var mouseX       = vals[0];
-			var mouseY       = vals[1];
-			var mouseOnFlg   = vals[2];
-			var mouseDownFlg = vals[3];
+			var mouseX       = x;
+			var mouseY       = y;
+			var mouseOnFlg   = on;
+			var mouseDownFlg = down;
 
 			// 現在の値を設定
 			if (mouseDownFlg == true) {
-				this.currentKeyInfo[0] = 1;
-				this.firstDownFlg = true;
+				// 押しっぱなし判定
+				if (this.firstDownFlg == false) {
+					// 初回押下
+					this.currentKeyInfo.pressed = 1;
+					this.firstDownFlg = true;
+				} else {
+					// 押しっぱなし状態
+					this.currentKeyInfo.pressed = 2;
+					this.keepDownFlg = true;
+				}
 			} else {
-				this.currentKeyInfo[0] = 0;
+				this.currentKeyInfo.pressed = 0;
 				this.firstDownFlg = false;
 				this.keepDownFlg = false;
 			}
-			this.currentKeyInfo[1] = mouseX;
-			this.currentKeyInfo[2] = mouseY;
+			this.currentKeyInfo.x = mouseX;
+			this.currentKeyInfo.y = mouseY;
 
 			if (this.enableQueue == true) {
 			// キューを使用する
 				if (this.queueList.length > 0) {
 				// キューがある場合
-					if (this.currentKeyInfo[0] != 2) {
-						if (((this.currentKeyInfo[0] != 0) || (this.queueList[this.queueList.length - 1][0] != 0)) &&
-							((this.currentKeyInfo[0] != 1) || (this.queueList[this.queueList.length - 1][0] != 1))) {
-							// キューに追加 (mouse_down_keepingを除く)
-							this.queueList.push([this.currentKeyInfo[0], this.currentKeyInfo[1], this.currentKeyInfo[2]]);
+					if (this.currentKeyInfo.pressed != 2) {
+						if (((this.currentKeyInfo.pressed != 0) || (this.queueList[this.queueList.length - 1].pressed != 0)) &&
+							((this.currentKeyInfo.pressed != 1) || (this.queueList[this.queueList.length - 1].pressed != 1))) {
+							// キュー(末尾)に追加 (mouse_down_keepingを除く)
+							this.queueList.push({
+									pressed:this.currentKeyInfo.pressed,
+									x:this.currentKeyInfo.x,
+									y:this.currentKeyInfo.y
+								});
 						}
 					}
 				} else {
 				// キューが無い場合
 					// キューの先頭に追加
-					this.queueList.push([this.currentKeyInfo[0], this.currentKeyInfo[1], this.currentKeyInfo[2]]);
+					this.queueList.push({
+							pressed:this.currentKeyInfo.pressed,
+							x:this.currentKeyInfo.x,
+							y:this.currentKeyInfo.y
+						});
 				}
 			}
+
+			// キー入力イベントを発生させる(アプリケーションで任意に利用)
+			pkg.addEvent("inputtedSomething");
 		},
 
 		update:function() {
@@ -1784,23 +2902,23 @@ var kashiwa = {};
 			// 重複除外フラグを初期化
 			this.preventive = false;
 
-			// 押しっぱなし判定
-			if ((this.keepDownFlg == true) && (this.currentKeyInfo[0] == 1)) {
-				this.currentKeyInfo[0] = 2;
-			} else if (this.firstDownFlg == true) {
-				this.keepDownFlg = true;
-			}
-
 			if (this.enableQueue == true) {
 			// キューを使用する
 				if (this.queueList.length > 0) {
 				// キューがある場合
 					var tmp = this.queueList.shift();
-					this.returnVal = [tmp[0], Math.floor(tmp[1]), Math.floor(tmp[2])];
+					this.returnVal = {
+							pressed:tmp.pressed,
+							x:Math.floor(tmp.x),
+							y:Math.floor(tmp.y)
+						};
 				} else {
 				// キューが無い場合
-					this.returnVal = [this.currentKeyInfo[0],
-						Math.floor(this.currentKeyInfo[1]), Math.floor(this.currentKeyInfo[2])];
+					this.returnVal = {
+							pressed:this.currentKeyInfo.pressed,
+							x:Math.floor(this.currentKeyInfo.x),
+							y:Math.floor(this.currentKeyInfo.y)
+						};
 				}
 			}
 		},
@@ -1811,26 +2929,37 @@ var kashiwa = {};
 			this.preventive = true;
 		},
 
-		getTouch:function() {
+		getTouchFlag:function() {
+		/* タッチモードを取得する */
+
+			var tmp = this.touchFlg;
+			return (tmp);
+		},
+
+		getPointer:function() {
 		/* タッチ,ポインタ入力値を取得する
-		   - return ( [入力コード, 入力時のx座標, 入力時のy座標] )
+		   - return ( {pressed: 入力コード, x: 入力時のx座標, y: 入力時のy座標} )
 		     入力コード :
 		       - mouse_up … 0
 		       - mouse_down … 1
 		       - mouse_down_keeping … 2 */
 
-			var tmp;
+			var tmp = {};
 			if (this.enableQueue == true) {
 			// キューを使用する
-				tmp = pkg.clone(this.returnVal);
+				tmp.pressed = this.returnVal.pressed;
+				tmp.x = this.returnVal.x;
+				tmp.y = this.returnVal.y;
 			} else {
 			// キューを使用しない
-				tmp = pkg.clone(this.currentKeyInfo);
+				tmp.pressed = this.currentKeyInfo.pressed;
+				tmp.x = this.currentKeyInfo.x;
+				tmp.y = this.currentKeyInfo.y;
 			}
 
 			// 重複チェックの除外
 			if (this.preventive == true) {
-				tmp[0] = 0;
+				tmp.pressed = 0;
 			}
 			return (tmp);
 		}
@@ -1848,104 +2977,145 @@ var kashiwa = {};
 	pkg.inheritPrototype(pkg.web.InputChecker, pkg.InputChecker);
 	pkg.addHash(pkg.web.InputChecker.prototype, {
 
-		config:function(element) {
-			/* 対象要素を指定して初期化する
-			   - p1 : キーチェックを行うDOMエレメント */
+		config:function(canv) {
+		/* 対象要素を指定して初期化する
+		   - p1 : 対象のCanvasControllerオブジェクト */
 
-				this.canv = element;
-			   
-				this.mouseX = 0;
-				this.mouseY = 0;
-				this.mouseOnFlg = false;
-				this.mouseDownFlg = false;
+			this.canvCtrl = canv;
+			this.canv = this.canvCtrl.getInfo().canv;
 
-	//			this.event = document.createEvent("HTMLEvents");
-	//			this.event.initEvent("af_input", true, true);
-			},
+			this.mouseX = 0;
+			this.mouseY = 0;
+			this.mouseOnFlg = false;
+			this.mouseDownFlg = false;
+			this.viewRate = 1;
+			this.orientation = 0;
+			this.canvasW = 0;
+			this.canvasH = 0;
+		},
 
 		start:function() {
 		/* キーチェックを開始する */
 
 			var _this = this;
 
-			if (this.touchFlg == true) {
+			// イベントハンドラを定義する
+			this.handler = {};
+			this.handler.getTouchPosition = function(e) {
+				e.preventDefault();
+				_this.touchFlg = true;
+
+				_this.mouseOnFlg = true;
+				_this.mouseDownFlg = true;
+				var rect = _this.canv.getBoundingClientRect();
+				_this.mouseX = e.touches[0].pageX - rect.left;
+				_this.mouseY = e.touches[0].pageY - rect.top;
+
+				// 倍率を補正する
+				_this.updateCanvasInfo();
+				_this.mouseX = Math.floor(_this.mouseX / _this.viewRate);
+				_this.mouseY = Math.floor(_this.mouseY / _this.viewRate);
+
+				// 画面回転を補正する
+				if (_this.orientation == 90) {
+					var tmpMouseX = _this.mouseY;
+					var tmpMouseY = _this.canvasH - _this.mouseX;
+					_this.mouseX = tmpMouseX;
+					_this.mouseY = tmpMouseY;
+				}
+
+				_this.sendInputData();
+			};
+			this.handler.getTouchEnd = function(e) {
+				e.preventDefault();
+				_this.touchFlg = true;
+
+				_this.mouseDownFlg = false;
+				_this.sendInputData();
+			};
+			this.handler.getMousePosition = function(e) {
+				_this.touchFlg = false;
+
+				_this.mouseOnFlg = true;
+				var rect = _this.canv.getBoundingClientRect();
+				_this.mouseX = e.clientX - rect.left;
+				_this.mouseY = e.clientY - rect.top;
+
+				// 倍率を補正する
+				_this.updateCanvasInfo();
+				_this.mouseX = Math.floor(_this.mouseX / _this.viewRate);
+				_this.mouseY = Math.floor(_this.mouseY / _this.viewRate);
+
+				// 画面回転を補正する
+				if (_this.orientation == 90) {
+					var tmpMouseX = _this.mouseY;
+					var tmpMouseY = _this.canvasH - _this.mouseX;
+					_this.mouseX = tmpMouseX;
+					_this.mouseY = tmpMouseY;
+				}
+
+				_this.sendInputData();
+			};
+			this.handler.getMouseUp = function(e) {
+				_this.touchFlg = false;
+
+				_this.mouseDownFlg = false;
+				_this.sendInputData();
+			};
+			this.handler.getMouseDown = function(e) {
+				_this.touchFlg = false;
+
+				_this.mouseDownFlg = true;
+				_this.sendInputData();
+			};
+			this.handler.getMouseOut = function(e) {
+				_this.touchFlg = false;
+
+				_this.mouseOnFlg = false;
+				_this.sendInputData();
+			};
+
+
 			// タッチデバイス
-				// TouchStart, TouchMove
-				var getTouchPosition = function(e) {
-					e.preventDefault();
-					_this.mouseOnFlg = true;
-					_this.mouseDownFlg = true;
-					var rect = _this.canv.getBoundingClientRect();
-					_this.mouseX = e.touches[0].pageX - rect.left;
-					_this.mouseY = e.touches[0].pageY - rect.top;
-					// _this.dispatchInputEvent();
-					_this.sendInputData();
-				}
-				this.canv.ontouchstart = getTouchPosition;
-				this.canv.ontouchmove = getTouchPosition;
 
-				// TouchEnd
-				var getTouchEnd = function(e) {
-					e.preventDefault();
-					_this.mouseDownFlg = false;
-					// _this.dispatchInputEvent();
-					_this.sendInputData();
-				}
-				this.canv.ontouchend = getTouchEnd;
-			} else {
+			// TouchStart, TouchMove
+			this.canv.addEventListener("touchstart", this.handler.getTouchPosition, true);
+			this.canv.addEventListener("touchmove", this.handler.getTouchPosition, true);
+
+			// TouchEnd
+			this.canv.addEventListener("touchend", this.handler.getTouchEnd, true);
+
 			// 非タッチデバイス
-				// MouseOver, MouseMove
-				var getMousePosition = function(e) {
-					_this.mouseOnFlg = true;
-					var rect = _this.canv.getBoundingClientRect();
-					_this.mouseX = e.clientX - rect.left;
-					_this.mouseY = e.clientY - rect.top;
-					// _this.dispatchInputEvent();
-					_this.sendInputData();
-				}
-				this.canv.onmousemove = getMousePosition;
-				this.canv.onmouseover = getMousePosition;
 
-				// MouseUp
-				var getMouseUp = function(e) {
-					_this.mouseDownFlg = false;
-					// _this.dispatchInputEvent();
-					_this.sendInputData();
-				}
-				this.canv.onmouseup = getMouseUp;
+			// MouseOver, MouseMove
+			this.canv.addEventListener("mousemove", this.handler.getMousePosition, false);
+			this.canv.addEventListener("mouseover", this.handler.getMousePosition, true);
 
-				// MouseDown
-				var getMouseDown = function(e) {
-					_this.mouseDownFlg = true;
-					// _this.dispatchInputEvent();
-					_this.sendInputData();
-				}
-				this.canv.onmousedown = getMouseDown;
-			}
+			// MouseUp
+			this.canv.addEventListener("mouseup", this.handler.getMouseUp, true);
+
+			// MouseDown
+			this.canv.addEventListener("mousedown", this.handler.getMouseDown, true);
+
 
 			// MouseOut
-			var getMouseOut = function(e) {
-				_this.mouseOnFlg = false;
-				// _this.dispatchInputEvent();
-				_this.sendInputData();
-			}
-			this.canv.onmouseout = getMouseOut;
+			this.canv.addEventListener("mouseout", this.handler.getMouseOut, true);
 		},
 
-//		dispatchInputEvent:function() {
-//		/* 入力イベントの送信 */
-//
-//			this.canv.dispatchEvent(this.event);
-//		},
+		updateCanvasInfo:function() {
+		/* canvasの情報を取得する */
+
+			this.canvasW = this.canvCtrl.getInfo().nativeW;
+			this.canvasH = this.canvCtrl.getInfo().nativeH;
+			this.viewRate = this.canvCtrl.getInfo().viewRate;
+			this.orientation = this.canvCtrl.getInfo().orientation;
+		},
 
 		sendInputData:function() {
 		/* 入力イベントの送信 */
 
 			var tmp = this.getVals();
-			this.keyHandler([
-				tmp.mouseX, tmp.mouseY,
-				tmp.mouseOnFlg, tmp.mouseDownFlg
-				]);
+			this.keyHandler(tmp.mouseX, tmp.mouseY, tmp.mouseOnFlg, tmp.mouseDownFlg);
 		},
 
 		getVals:function() {
@@ -1975,27 +3145,33 @@ var kashiwa = {};
 		stop:function() {
 		/* キーチェックを停止する */
 
-			if (this.touchFlg == true) {
 			// タッチデバイス
-				// TouchStart, TouchMove
-				this.canv.ontouchstart = null;
-				this.canv.ontouchmove = null;
-				// TouchEnd
-				this.canv.ontouchend = null;
-			} else {
+
+			// TouchStart, TouchMove
+			this.canv.removeEventListener("touchstart", this.handler.getTouchPosition, true);
+			this.canv.removeEventListener("touchmove", this.handler.getTouchPosition, true);
+
+			// TouchEnd
+			this.canv.removeEventListener("touchend", this.handler.getTouchEnd, true);
+
+
 			// 非タッチデバイス
-				// MouseOver, MouseMove
-				this.canv.onmousemove = null;
-				this.canv.onmouseover = null;
-				// MouseUp
-				this.canv.onmouseup = null;
-				// MouseDown
-				this.canv.onmousedown = null;
-			}
+
+			// MouseOver, MouseMove
+			this.canv.removeEventListener("mousemove", this.handler.getMousePosition, true);
+			this.canv.removeEventListener("mouseover", this.handler.getMousePosition, true);
+
+			// MouseUp
+			this.canv.removeEventListener("mouseup", this.handler.getMouseUp, true);
+
+			// MouseDown
+			this.canv.removeEventListener("mousedown", this.handler.getMouseDown, true);
+
+
 			// MouseOut
-			this.canv.onmouseout = null;
+			this.canv.removeEventListener("mouseout", this.handler.getMouseOut, true);
 		}
-	
+
 	});
 
 
@@ -2055,7 +3231,7 @@ var kashiwa = {};
 		init:function(url, dtype, mtd, sdata, sdtype) {
 		/* 初期化する
 		   - p1 : リクエストを送るURL
-		   - p2 : 受信するデータ形式(=0:JSON / =1:XML)
+		   - p2 : 受信するデータ形式(=0:JSON,Text / =1:XML)
 		   - p3 : 使用するメソッド(=0:GET / =1:POST)
 		   - p4 : 送信するデータ(=null:受信のみ)
 		   - p5 : 送信するデータ形式(=null:フォーム送信形式) */
@@ -2207,23 +3383,23 @@ var kashiwa = {};
 				this.socket = new MozWebSocket(this.urlSocket);
 			}
 
-			var curObj = this;
+			var _this = this;
 			this.socket.onopen = function(e){
 			// 接続した
-				curObj.stateSocket = 1;
+				_this.stateSocket = 1;
 			}
 			this.socket.onclose = function(e){
 			// 切断した
-				curObj.stateSocket = 0;
+				_this.stateSocket = 0;
 			}
 			this.socket.onerror = function(e){
 			// エラーが発生した
-				curObj.stateSocket = 2;
+				_this.stateSocket = 2;
 			}
 			this.socket.onmessage = function(e){
 			// メッセージを受信した
-				curObj.message = e.data;
-				curObj.flgMessage = true;
+				_this.message = e.data;
+				_this.flgMessage = true;
 			}
 		},
 
@@ -2385,13 +3561,78 @@ var kashiwa = {};
 	-------------------- */
 
 	/*
+		---------- [SVGLoader]
+	*/
+
+	pkg.SVGLoader = function(rand) {
+	/* - p1 : ランダムフレーズ */
+
+		this.randomPhrase = null;
+		if (rand) {
+			this.randomPhrase = rand;
+		}
+		this.imgData = null;
+	};
+	pkg.SVGLoader.prototype = {
+
+		init:function(path) {
+		/* SVGデータの読み込みを初期化する
+		   - p1 : SVGファイルのパス */
+
+			this.imgData = null;
+
+			var _this = this;
+			var xhr = new kashiwa.HttpRequestController();
+			xhr.init(path, 0, 0);
+			xhr.start(function() {
+			// 読み込みが完了
+
+				// 取得したSVGデータからBlobオブジェクトを生成する
+				var data = this.getData();
+				var blobSVG = new Blob([data], {type: "image/svg+xml"});
+
+				// URLオブジェクトからFileオブジェクトのURLを生成する
+				var urlObj = self.URL || self.webkitURL || self;
+				var url = urlObj.createObjectURL(blobSVG);
+
+				// URLからImageオブジェクトを生成する
+				_this.imgData = new Image();
+				_this.imgData.src = url;
+				_this.imgData.onload = function() {
+					// URLオブジェクトからURLを削除
+					urlObj.revokeObjectURL(url); //画像のFileオブジェクトのURLを削除
+
+					pkg.addEvent("imageDataLoaded");
+				};
+			},
+			function() {
+			// 読み込みエラー
+
+				return false;
+			});
+		},
+
+		getData:function() {
+		/* SVGデータを取得する */
+
+			var img = this.imgData;
+			return (img);
+		}
+
+	};
+
+
+	/*
 		---------- [PictureLoader]
 	*/
 
 	pkg.PictureLoader = function(rand) {
 	/* - p1 : ランダムフレーズ */
 
-		this.randomPhrase = rand;
+		this.randomPhrase = null;
+		if (rand) {
+			this.randomPhrase = rand;
+		}
 
 		this.srcPic = new Array();
 		this.imgPic = new Array();
@@ -2711,15 +3952,20 @@ var kashiwa = {};
 		getPictureInfo:function(id) {
 		/* 画像の情報を取得する
 		   - p1 : 画像ID
-		   - return ( [シート上のX座標, Y座標, 横幅, 高さ] ) */
+		   - return (
+			   x: シート上のX座標,
+			   y: シート上のY座標,
+			   w: シート上の横幅,
+			   h: シート上の高さ
+			   ) */
 
-			var info = [
-				Math.floor(this.picPosX[id] / this.dispPxr),
-				Math.floor(this.picPosY[id] / this.dispPxr),
-				Math.floor(this.picSizeW[id] / this.dispPxr),
-				Math.floor(this.picSizeH[id] / this.dispPxr)
-			];
-			return (info);
+			var obj = {};
+			obj.x = Math.floor(this.picPosX[id] / this.dispPxr);
+			obj.y = Math.floor(this.picPosY[id] / this.dispPxr);
+			obj.w = Math.floor(this.picSizeW[id] / this.dispPxr);
+			obj.h = Math.floor(this.picSizeH[id] / this.dispPxr);
+
+			return (obj);
 		}
 
 	};
@@ -2820,219 +4066,6 @@ var kashiwa = {};
 	/* --------------------
 	    インタラクション
 	-------------------- */
-
-	/*
-		---------- [ButtonController]
-	*/
-
-	pkg.ButtonController = function(anime, key, touch) {
-	/* - p1 : アニメーションのコマ数
-	   - p2 : InputChecker */
-
-		this.animeMax = anime;
-		this.inputChk = key;
-		this.touchFlg = touch;
-		this.animeEasing = new pkg.Easing(this.animeMax, 50);
-
-		this.init();
-	};
-	pkg.ButtonController.prototype = {
-
-		init:function() {
-		/* ステータスを初期化する */
-
-			this.result = 0;
-
-			/* buttonHover :
-			   -  0 … ホバー無し
-			   -  1 … ホバー開始
-			   -  2 … ホバー終了 */
-			this.buttonHover = 0;
-			this.cntBtHover = 0;
-			this.lvBtHover = 0;
-
-			/* buttonState :
-			   -  0 … タッチ無し
-			   -  1 … タッチスタート
-			   -  2 … タッチエンド */
-			this.buttonState = 0;
-			this.cntBtState = 0;
-			this.lvBtState = 0;
-
-			this.beforePos = [-1, -1];
-		},
-
-		defButton:function(posx, posy, bw, bh) {
-		/* ボタンの位置・大きさを定義する
-		   - p1 : ボタンのX座標
-		   - p2 : ボタンのY座標
-		   - p3 : ボタンの幅
-		   - p4 : ボタンの高さ */
-
-			this.btPosX = posx;
-			this.btPosY = posy;
-			this.btW = bw;
-			this.btH = bh;
-		},
-
-		update:function(f_rate) {
-		/* ボタンのステータスを更新する
-		   - p1 : 前フレームからの進捗 */
-
-			if (this.buttonHover == 1) {
-				if (this.cntBtHover < this.animeMax) {
-					this.cntBtHover += f_rate;
-					if (this.cntBtHover > this.animeMax) {
-						this.cntBtHover = this.animeMax;
-					}
-				}
-			} else if (this.buttonHover == 2) {
-				if (this.cntBtHover > 0) {
-					this.cntBtHover -= f_rate;
-					if (this.cntBtHover < 0) {
-						this.cntBtHover = 0;
-					}
-				} else {
-					this.buttonHover = 0;
-				}
-			}
-			this.lvBtHover = this.animeEasing.getRate(this.cntBtHover);
-
-			if (this.buttonState == 1) {
-				if (this.cntBtState < this.animeMax) {
-					this.cntBtState += f_rate;
-					if (this.cntBtState > this.animeMax) {
-						this.cntBtState = this.animeMax;
-					}
-				}
-			} else if (this.buttonState == 2) {
-				if (this.cntBtState > 0) {
-					this.cntBtState -= f_rate;
-					if (this.cntBtState < 0) {
-						this.cntBtState = 0;
-					}
-				} else {
-					this.buttonState = 0;
-				}
-			}
-			this.lvBtState = this.animeEasing.getRate(this.cntBtState);
-
-			this.input();
-		},
-
-		input:function() {
-		/* ボタンの押下を確認する */
-
-			var tmpPos = this.inputChk.getTouch();
-
-			// ボタン判定
-			if (this.touchFlg == true) {
-			// タッチ端末
-
-				if ((this.buttonHover == 1) && (tmpPos[1] < 0) && (this.beforePos[0] > 0)) {
-				// タッチを放した時
-					if ((this.beforePos[0] >= this.btPosX) && (this.beforePos[0] < this.btPosX + this.btW) &&
-						(this.beforePos[1] >= this.btPosY) && (this.beforePos[1] < this.btPosY + this.btH)) {
-					// 前回の座標がボタン上(＝確定操作)
-						this.result = 1;
-					}
-				} else {
-					if ((tmpPos[1] >= this.btPosX) && (tmpPos[1] < this.btPosX + this.btW) &&
-						(tmpPos[2] >= this.btPosY) && (tmpPos[2] < this.btPosY + this.btH)) {
-						// ホバーを確認する
-						this.buttonHover = 1;
-					} else if (this.buttonHover == 1) {
-					// ホバーの終了
-						this.buttonHover = 2;
-						if (this.buttonState == 1) {
-							this.buttonState = 2;
-						}
-					}
-				}
-			} else {
-			// マウス端末
-
-				if ((tmpPos[1] >= this.btPosX) && (tmpPos[1] < this.btPosX + this.btW) &&
-					(tmpPos[2] >= this.btPosY) && (tmpPos[2] < this.btPosY + this.btH)) {
-					// ホバーを確認する
-					this.buttonHover = 1;
-
-					if ((tmpPos[0] == 0) && (this.buttonState == 1)) {
-					// 押しっぱなし状態からの解放(＝確定操作)
-						this.result = 1;
-						this.buttonState = 2;
-					}
-					if (tmpPos[0] == 1) {
-					// 押しっぱなしを確認
-						this.buttonState = 1;
-					}
-				} else if (this.buttonHover == 1) {
-				// ホバーの終了
-					this.buttonHover = 2;
-					if (this.buttonState == 1) {
-						this.buttonState = 2;
-					}
-				}
-			}
-
-			this.beforePos[0] = tmpPos[1];
-			this.beforePos[1] = tmpPos[2];
-		},
-
-		getHover:function() {
-		/* ボタンのホバー状態を取得する */
-
-			var tmp = this.buttonHover;
-			return (tmp);
-		},
-
-		getHoverLevel:function() {
-		/* ボタンのホバー状態の進度を取得する */
-
-			var tmp = this.lvBtHover;
-			return (tmp);
-		},
-
-		getActive:function() {
-		/* ボタンのアクティブ状態を取得する */
-
-			var tmp = this.buttonState;
-			return (tmp);
-		},
-
-		getActiveLevel:function() {
-		/* ボタンのアクティブ状態の進度を取得する */
-
-			var tmp = this.lvBtState;
-			return (tmp);
-		},
-
-		releasePress:function() {
-		/* ボタンの押しっぱなし判定を解放する */
-
-			this.beforePos = [-1, -1];
-			this.buttonHover = 2;
-			this.buttonState = 2;
-			this.result = 0;
-		},
-
-		getResult:function() {
-		/* 結果を取得する
-		   - return ( 状態コード )
-		     状態コード :
-		       -  0 … 未確定
-		       -  1 … ボタンが押された */
-
-			var tmp = 0;
-			if (this.result != 0) {
-				tmp = this.result;
-				this.result = 0;
-			}
-			return (tmp);
-		}
-
-	};
-
 
 	/*
 		---------- [Easing]
