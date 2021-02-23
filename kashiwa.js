@@ -1,8 +1,8 @@
 ﻿/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
      kashiwa.js
    ──────────────────────────────
-     Ver. 7.2.1
-     Copyright(c) 2014-2020 ARINOKI
+     Ver. 7.3.1
+     Copyright(c) 2014-2021 ARINOKI
      Released under the MIT license
      http://opensource.org/licenses/mit-license.php
    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
@@ -601,7 +601,7 @@ var kashiwa = {};
 		   - p1 : 対象のCanvasControllerオブジェクト */
 
 			for (var i = 0; i < this.objects.length; i ++) {
-				this.objects[i].draw(canv);
+				this.objects[i].draw(canv, this.objects[i], this.transitionRate);
 			}
 		},
 
@@ -974,8 +974,16 @@ var kashiwa = {};
 		this.init();
 		this.type = "Group";
 		this.parent = null;
+
+		this.constructor();
 	};
 	pkg.obj.Group.prototype = {
+
+		constructor:function() {
+		/* コンストラクタ(追加処理) */
+
+			return false;
+		},
 
 		init:function() {
 		/* 初期化する */
@@ -1061,8 +1069,16 @@ var kashiwa = {};
 		this.init(target, anime);
 		this.type = "ButtonFrame";
 		this.parent = null;
+
+		this.constructor();
 	};
 	pkg.obj.ButtonFrame.prototype = {
+
+		constructor:function() {
+		/* コンストラクタ(追加処理) */
+
+			return false;
+		},
 
 		init:function(target, anime) {
 		/* 初期化する
@@ -1397,8 +1413,16 @@ var kashiwa = {};
 		this.init();
 		this.type = "Text";
 		this.parent = null;
+
+		this.constructor();
 	};
 	pkg.obj.Text.prototype = {
+
+		constructor:function() {
+		/* コンストラクタ(追加処理) */
+
+			return false;
+		},
 
 		init:function() {
 		/* 初期化する */
@@ -1439,8 +1463,16 @@ var kashiwa = {};
 		this.init();
 		this.type = "FillRect";
 		this.parent = null;
+
+		this.constructor();
 	};
 	pkg.obj.FillRect.prototype = {
+
+		constructor:function() {
+		/* コンストラクタ(追加処理) */
+
+			return false;
+		},
 
 		init:function() {
 		/* 初期化する */
@@ -1475,8 +1507,16 @@ var kashiwa = {};
 		this.init();
 		this.type = "StrokeRect";
 		this.parent = null;
+
+		this.constructor();
 	};
 	pkg.obj.StrokeRect.prototype = {
+
+		constructor:function() {
+		/* コンストラクタ(追加処理) */
+
+			return false;
+		},
 
 		init:function() {
 		/* 初期化する */
@@ -1514,8 +1554,16 @@ var kashiwa = {};
 		this.init();
 		this.type = "FillCircle";
 		this.parent = null;
+
+		this.constructor();
 	};
 	pkg.obj.FillCircle.prototype = {
+
+		constructor:function() {
+		/* コンストラクタ(追加処理) */
+
+			return false;
+		},
 
 		init:function() {
 		/* 初期化する */
@@ -1549,8 +1597,16 @@ var kashiwa = {};
 		this.init();
 		this.type = "StrokeCircle";
 		this.parent = null;
+
+		this.constructor();
 	};
 	pkg.obj.StrokeCircle.prototype = {
+
+		constructor:function() {
+		/* コンストラクタ(追加処理) */
+
+			return false;
+		},
 
 		init:function() {
 		/* 初期化する */
@@ -1586,8 +1642,16 @@ var kashiwa = {};
 		this.init();
 		this.type = "FillRoundRect";
 		this.parent = null;
+
+		this.constructor();
 	};
 	pkg.obj.FillRoundRect.prototype = {
+
+		constructor:function() {
+		/* コンストラクタ(追加処理) */
+
+			return false;
+		},
 
 		init:function() {
 		/* 初期化する */
@@ -1623,8 +1687,16 @@ var kashiwa = {};
 		this.init();
 		this.type = "StrokeRoundRect";
 		this.parent = null;
+
+		this.constructor();
 	};
 	pkg.obj.StrokeRoundRect.prototype = {
+
+		constructor:function() {
+		/* コンストラクタ(追加処理) */
+
+			return false;
+		},
 
 		init:function() {
 		/* 初期化する */
@@ -1662,8 +1734,16 @@ var kashiwa = {};
 		this.init();
 		this.type = "DrawSVG";
 		this.parent = null;
+
+		this.constructor();
 	};
 	pkg.obj.DrawSVG.prototype = {
+
+		constructor:function() {
+		/* コンストラクタ(追加処理) */
+
+			return false;
+		},
 
 		init:function() {
 		/* 初期化する */
@@ -1694,8 +1774,16 @@ var kashiwa = {};
 		this.init();
 		this.type = "DrawImage";
 		this.parent = null;
+
+		this.constructor();
 	};
 	pkg.obj.DrawImage.prototype = {
+
+		constructor:function() {
+		/* コンストラクタ(追加処理) */
+
+			return false;
+		},
 
 		init:function() {
 		/* 初期化する */
@@ -1726,8 +1814,16 @@ var kashiwa = {};
 		this.init();
 		this.type = "Spinner";
 		this.parent = null;
+
+		this.constructor();
 	};
 	pkg.obj.Spinner.prototype = {
+
+		constructor:function() {
+		/* コンストラクタ(追加処理) */
+
+			return false;
+		},
 
 		init:function() {
 		/* 初期化する */
@@ -1810,9 +1906,13 @@ var kashiwa = {};
 			}
 		},
 
-		draw:function(canv) {
+		draw:function(canv, this_, rate) {
 		/* 描画する
-		   - p1 : 対象のCanvasControllerオブジェクト */
+		   - p1 : 対象のCanvasControllerオブジェクト
+		   - p2 : 実行元オブジェクト
+		   - p3 : アニメーションカウンタ */
+
+			this.drawBefore(this_, rate);
 
 			if (this.hidden == true) {
 				return false;
@@ -1825,8 +1925,16 @@ var kashiwa = {};
 				tmpObj.y = this.y + this.content[i].y;
 				tmpObj.alpha = this.alpha * this.content[i].alpha;
 
-				tmpObj.draw(canv);
+				tmpObj.draw(canv, this.content[i], rate);
 			}
+		},
+
+		drawBefore:function(this_, rate) {
+		/* 描画時の追加処理
+		   - p1 : 実行元オブジェクト
+		   - p2 : アニメーションカウンタ */
+
+			return false;
 		}
 
 	});
@@ -1862,9 +1970,20 @@ var kashiwa = {};
 			this.inputChk.stop();
 		},
 
-		draw:function(canv) {
+		draw:function(canv, this_, rate) {
 		/* 描画する
-		   - p1 : 対象のCanvasControllerオブジェクト */
+		   - p1 : 対象のCanvasControllerオブジェクト
+		   - p2 : 実行元オブジェクト
+		   - p3 : アニメーションカウンタ */
+
+			this.drawBefore(this_, rate);
+
+			return false;
+		},
+
+		drawBefore:function(rate) {
+		/* 描画時の追加処理
+		   - p1 : アニメーションカウンタ */
 
 			return false;
 		}
@@ -1882,9 +2001,13 @@ var kashiwa = {};
 	pkg.inheritPrototype(pkg.web.Text, pkg.obj.Text);
 	pkg.addHash(pkg.web.Text.prototype, {
 
-		draw:function(canv) {
+		draw:function(canv, this_, rate) {
 		/* 描画する
-		   - p1 : 対象のCanvasControllerオブジェクト */
+		   - p1 : 対象のCanvasControllerオブジェクト
+		   - p2 : 実行元オブジェクト
+		   - p3 : アニメーションカウンタ */
+
+			this.drawBefore(this_, rate);
 
 			if (this.hidden == true) {
 				return false;
@@ -1906,7 +2029,14 @@ var kashiwa = {};
 			ctx.rotate(0);
 		},
 
-		measure:function(ctx) {
+		drawBefore:function(rate) {
+		/* 描画時の追加処理
+		   - p1 : アニメーションカウンタ */
+
+			return false;
+		},
+
+		measure:function(canv) {
 		/* 横幅を計測する
 		   - p1 : 対象のCanvasControllerオブジェクト */
 
@@ -1939,9 +2069,13 @@ var kashiwa = {};
 	pkg.inheritPrototype(pkg.web.FillRect, pkg.obj.FillRect);
 	pkg.addHash(pkg.web.FillRect.prototype, {
 
-		draw:function(canv) {
+		draw:function(canv, this_, rate) {
 		/* 描画する
-		   - p1 : 対象のCanvasControllerオブジェクト */
+		   - p1 : 対象のCanvasControllerオブジェクト
+		   - p2 : 実行元オブジェクト
+		   - p3 : アニメーションカウンタ */
+
+			this.drawBefore(this_, rate);
 
 			if (this.hidden == true) {
 				return false;
@@ -1957,6 +2091,13 @@ var kashiwa = {};
 
 			ctx.setTransform(1, 0, 0, 1, 0, 0);
 			ctx.rotate(0);
+		},
+
+		drawBefore:function(rate) {
+		/* 描画時の追加処理
+		   - p1 : アニメーションカウンタ */
+
+			return false;
 		}
 
 	});
@@ -1972,9 +2113,13 @@ var kashiwa = {};
 	pkg.inheritPrototype(pkg.web.StrokeRect, pkg.obj.StrokeRect);
 	pkg.addHash(pkg.web.StrokeRect.prototype, {
 
-		draw:function(canv) {
+		draw:function(canv, this_, rate) {
 		/* 描画する
-		   - p1 : 対象のCanvasControllerオブジェクト */
+		   - p1 : 対象のCanvasControllerオブジェクト
+		   - p2 : 実行元オブジェクト
+		   - p3 : アニメーションカウンタ */
+
+			this.drawBefore(this_, rate);
 
 			if (this.hidden == true) {
 				return false;
@@ -1992,6 +2137,13 @@ var kashiwa = {};
 
 			ctx.setTransform(1, 0, 0, 1, 0, 0);
 			ctx.rotate(0);
+		},
+
+		drawBefore:function(rate) {
+		/* 描画時の追加処理
+		   - p1 : アニメーションカウンタ */
+
+			return false;
 		}
 
 	});
@@ -2007,9 +2159,13 @@ var kashiwa = {};
 	pkg.inheritPrototype(pkg.web.FillCircle, pkg.obj.FillCircle);
 	pkg.addHash(pkg.web.FillCircle.prototype, {
 
-		draw:function(canv) {
+		draw:function(canv, this_, rate) {
 		/* 描画する
-		   - p1 : 対象のCanvasControllerオブジェクト */
+		   - p1 : 対象のCanvasControllerオブジェクト
+		   - p2 : 実行元オブジェクト
+		   - p3 : アニメーションカウンタ */
+
+			this.drawBefore(this_, rate);
 
 			if (this.hidden == true) {
 				return false;
@@ -2027,6 +2183,13 @@ var kashiwa = {};
 
 			ctx.setTransform(1, 0, 0, 1, 0, 0);
 			ctx.rotate(0);
+		},
+
+		drawBefore:function(rate) {
+		/* 描画時の追加処理
+		   - p1 : アニメーションカウンタ */
+
+			return false;
 		}
 
 	});
@@ -2042,9 +2205,13 @@ var kashiwa = {};
 	pkg.inheritPrototype(pkg.web.StrokeCircle, pkg.obj.StrokeCircle);
 	pkg.addHash(pkg.web.StrokeCircle.prototype, {
 
-		draw:function(canv) {
+		draw:function(canv, this_, rate) {
 		/* 描画する
-		   - p1 : 対象のCanvasControllerオブジェクト */
+		   - p1 : 対象のCanvasControllerオブジェクト
+		   - p2 : 実行元オブジェクト
+		   - p3 : アニメーションカウンタ */
+
+			this.drawBefore(this_, rate);
 
 			if (this.hidden == true) {
 				return false;
@@ -2064,6 +2231,13 @@ var kashiwa = {};
 
 			ctx.setTransform(1, 0, 0, 1, 0, 0);
 			ctx.rotate(0);
+		},
+
+		drawBefore:function(rate) {
+		/* 描画時の追加処理
+		   - p1 : アニメーションカウンタ */
+
+			return false;
 		}
 
 	});
@@ -2079,9 +2253,13 @@ var kashiwa = {};
 	pkg.inheritPrototype(pkg.web.FillRoundRect, pkg.obj.FillRoundRect);
 	pkg.addHash(pkg.web.FillRoundRect.prototype, {
 
-		draw:function(canv) {
+		draw:function(canv, this_, rate) {
 		/* 描画する
-		   - p1 : 対象のCanvasControllerオブジェクト */
+		   - p1 : 対象のCanvasControllerオブジェクト
+		   - p2 : 実行元オブジェクト
+		   - p3 : アニメーションカウンタ */
+
+			this.drawBefore(this_, rate);
 
 			if (this.hidden == true) {
 				return false;
@@ -2106,6 +2284,13 @@ var kashiwa = {};
 
 			ctx.setTransform(1, 0, 0, 1, 0, 0);
 			ctx.rotate(0);
+		},
+
+		drawBefore:function(rate) {
+		/* 描画時の追加処理
+		   - p1 : アニメーションカウンタ */
+
+			return false;
 		}
 
 	});
@@ -2121,9 +2306,13 @@ var kashiwa = {};
 	pkg.inheritPrototype(pkg.web.StrokeRoundRect, pkg.obj.StrokeRoundRect);
 	pkg.addHash(pkg.web.StrokeRoundRect.prototype, {
 
-		draw:function(canv) {
+		draw:function(canv, this_, rate) {
 		/* 描画する
-		   - p1 : 対象のCanvasControllerオブジェクト */
+		   - p1 : 対象のCanvasControllerオブジェクト
+		   - p2 : 実行元オブジェクト
+		   - p3 : アニメーションカウンタ */
+
+			this.drawBefore(this_, rate);
 
 			if (this.hidden == true) {
 				return false;
@@ -2151,6 +2340,13 @@ var kashiwa = {};
 
 			ctx.setTransform(1, 0, 0, 1, 0, 0);
 			ctx.rotate(0);
+		},
+
+		drawBefore:function(rate) {
+		/* 描画時の追加処理
+		   - p1 : アニメーションカウンタ */
+
+			return false;
 		}
 
 	});
@@ -2175,9 +2371,13 @@ var kashiwa = {};
 			this.imgData = img;
 		},
 
-		draw:function(canv) {
+		draw:function(canv, this_, rate) {
 		/* 描画する
-		   - p1 : 対象のCanvasControllerオブジェクト */
+		   - p1 : 対象のCanvasControllerオブジェクト
+		   - p2 : 実行元オブジェクト
+		   - p3 : アニメーションカウンタ */
+
+			this.drawBefore(this_, rate);
 
 			if (this.hidden == true) {
 				return false;
@@ -2202,6 +2402,13 @@ var kashiwa = {};
 
 			ctx.setTransform(1, 0, 0, 1, 0, 0);
 			ctx.rotate(0);
+		},
+
+		drawBefore:function(rate) {
+		/* 描画時の追加処理
+		   - p1 : アニメーションカウンタ */
+
+			return false;
 		}
 
 	});
@@ -2243,9 +2450,13 @@ var kashiwa = {};
 			this.pxrOpt = pxr_opt;
 		},
 
-		draw:function(canv) {
+		draw:function(canv, this_, rate) {
 		/* 描画する
-		   - p1 : 対象のCanvasControllerオブジェクト */
+		   - p1 : 対象のCanvasControllerオブジェクト
+		   - p2 : 実行元オブジェクト
+		   - p3 : アニメーションカウンタ */
+
+			this.drawBefore(this_, rate);
 
 			if (this.hidden == true) {
 				return false;
@@ -2274,6 +2485,13 @@ var kashiwa = {};
 
 			ctx.setTransform(1, 0, 0, 1, 0, 0);
 			ctx.rotate(0);
+		},
+
+		drawBefore:function(rate) {
+		/* 描画時の追加処理
+		   - p1 : アニメーションカウンタ */
+
+			return false;
 		}
 
 	});
@@ -2291,9 +2509,13 @@ var kashiwa = {};
 	pkg.inheritPrototype(pkg.web.Spinner, pkg.obj.Spinner);
 	pkg.addHash(pkg.web.Spinner.prototype, {
 
-		draw:function(canv) {
+		draw:function(canv, this_, rate) {
 		/* 描画する
-		   - p1 : 対象のCanvasControllerオブジェクト */
+		   - p1 : 対象のCanvasControllerオブジェクト
+		   - p2 : 実行元オブジェクト
+		   - p3 : アニメーションカウンタ */
+
+			this.drawBefore(this_, rate);
 
 			if (this.hidden == true) {
 				return false;
@@ -2343,6 +2565,13 @@ var kashiwa = {};
 
 			ctx.setTransform(1, 0, 0, 1, 0, 0);
 			ctx.rotate(0);
+		},
+
+		drawBefore:function(rate) {
+		/* 描画時の追加処理
+		   - p1 : アニメーションカウンタ */
+
+			return false;
 		}
 
 	});
